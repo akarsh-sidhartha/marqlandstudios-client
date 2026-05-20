@@ -594,7 +594,6 @@ const ClientPortalView = () => {
       // Persist to DB so shortlist survives page refresh
       const ids = Array.from(s);
       log.debug('Updating shortlist', { itemId: id, total: ids.length });
-      //fetch(`/api/portal/public/${slug}/shortlist`, {
        fetch(`${API_BASE}/api/portal/public/${slug}/shortlist`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -608,7 +607,6 @@ const ClientPortalView = () => {
     initNotifications(); // register SW, no permission prompt yet
     load();
     log.info('Portal view mounted', { slug });
-    //fetch(`/api/portal/public/${slug}/view`,{method:'POST'}).catch(err =>
     fetch(`${API_BASE}/api/portal/public/${slug}/view`,{method:'POST'}).catch(err =>
       log.warn('View count increment failed', err.message)
     );

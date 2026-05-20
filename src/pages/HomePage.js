@@ -26,8 +26,7 @@ const InstagramIcon = ({ size = 16 }) => (
   </svg>
 );
 
-const API_BASE   = process.env.REACT_APP_API_BASE   || '';
-const IMAGE_BASE = process.env.REACT_APP_IMAGE_BASE || '';
+const API_BASE   = process.env.REACT_APP_API_URL    || '';
 
 // Bento span class per card index
 const getBentoClass = (index) => {
@@ -455,7 +454,7 @@ const HomePage = () => {
           <button onClick={closeLb} style={{ position: 'absolute', top: 26, right: 26, background: 'none', border: 'none', color: 'rgba(255,255,255,0.32)', cursor: 'pointer' }}><X size={24} /></button>
           <button onClick={prevLb}  style={{ position: 'absolute', left: 12, padding: 16, background: 'none', border: 'none', color: 'rgba(255,255,255,0.22)', cursor: 'pointer' }}><ChevronLeft size={42} strokeWidth={1} /></button>
           <div style={{ maxWidth: '86vw', maxHeight: '82vh', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-            <img src={`${IMAGE_BASE}${lb.images[lb.index]?.url}`} alt="" style={{ maxWidth: '100%', maxHeight: '76vh', objectFit: 'contain' }} />
+            <img src={lb.images[lb.index]?.url} alt="" style={{ maxWidth: '100%', maxHeight: '76vh', objectFit: 'contain' }} />
             <p style={{ marginTop: 18, color: 'rgba(255,255,255,0.18)', fontSize: 10, letterSpacing: '0.3em', fontFamily: 'Jost, sans-serif' }}>{lb.index + 1} / {lb.images.length}</p>
           </div>
           <button onClick={nextLb}  style={{ position: 'absolute', right: 12, padding: 16, background: 'none', border: 'none', color: 'rgba(255,255,255,0.22)', cursor: 'pointer' }}><ChevronRight size={42} strokeWidth={1} /></button>
@@ -566,7 +565,7 @@ const HomePage = () => {
                     <FadeIn key={cat.id} delay={idx * 0.06} className={getBentoClass(idx)} style={{ height: '100%' }}>
                       <div className="cat-card" onClick={() => selectCat(cat)}>
                         {cover
-                          ? <img src={`${IMAGE_BASE}${cover.url}`} alt={cat.name} />
+                          ? <img src={cover.url} alt={cat.name} />
                           : <div style={{ width: '100%', height: '100%', background: '#1a2332', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.1)' }}><ImageIcon size={34} strokeWidth={1} /></div>
                         }
                         <div className="cat-overlay" />
@@ -666,7 +665,7 @@ const HomePage = () => {
               <div className="masonry">
                 {imgs.map((img, idx) => (
                   <div key={img.id} className="masonry-item" onClick={() => openLb(idx)}>
-                    <img src={`${IMAGE_BASE}${img.url}`} alt="" loading="lazy" />
+                    <img src={img.url} alt="" loading="lazy" />
                   </div>
                 ))}
               </div>
