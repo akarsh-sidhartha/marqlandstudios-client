@@ -4,6 +4,9 @@ import { useParams } from 'react-router-dom';
 import { initNotifications, requestNotifPermission, pushNotif, subscribeToPortalPush } from '../utils/portalNotifications';
 import { createLogger } from '../utils/logger';
 
+// REQUIRED in production: set REACT_APP_API_URL to your backend URL in the build environment
+// e.g. REACT_APP_API_URL=https://api.marqlandstudios.com  (no trailing slash)
+// Without this, every API call falls back to localhost:5000 and fails in production.
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 // ─── Logger ───────────────────────────────────────────────────────────────────
