@@ -1,0 +1,14 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Block direct access to .builds folder
+  RewriteRule ^\.builds - [F,L]
+
+  # Don't rewrite real files or folders
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+
+  # Everything else → index.html
+  RewriteRule . /index.html [L]
+</IfModule>
