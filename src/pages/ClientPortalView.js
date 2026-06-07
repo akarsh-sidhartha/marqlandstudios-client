@@ -895,9 +895,9 @@ const ClientPortalView = () => {
                 <h1 style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 'clamp(32px,5vw,56px)', fontWeight: 300, color: 'white', lineHeight: 1.05, marginBottom: 10 }}>
                   Estimate your <em style={{ color: '#b8975a' }}>investment.</em>
                 </h1>
-                <p style={{ fontFamily: "'Jost',sans-serif", fontSize: 13, color: 'rgba(255,255,255,0.32)', fontWeight: 300, maxWidth: 480, lineHeight: 1.75 }}>
+                <p style={{ fontFamily: "'Jost',sans-serif", fontSize: 13, color: 'white', fontWeight: 300, maxWidth: 480, lineHeight: 1.75 }}>
                   {portal.type === 'product'
-                    ? 'Set quantities against each product to see an indicative order value. Final invoice will include GST, branding, and shipping.'
+                    ? '** Set quantities against each product to see an indicative order value. Final invoice will include GST, branding, and shipping.'
                     : 'Enter your guest count and room split to compare property costs side by side. Toggle add-ons to fine-tune your estimate.'}
                 </p>
               </div>
@@ -957,7 +957,7 @@ const ClientPortalView = () => {
                     <div style={{ padding: '14px 16px 16px', background: '#ffffff', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', lineHeight: 1.2, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Jost',sans-serif" }}>{item.name}</div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: '#d4b06a', fontFamily: "'Cormorant Garamond',Georgia,serif", flexShrink: 0 }}>{toINR(portal?.calculatorState?.[item._id]?.priceOverride ?? item.price)}</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: '#d4b06a', fontFamily: "'Jost',sans-serif", flexShrink: 0 }}>{toINR(portal?.calculatorState?.[item._id]?.priceOverride ?? item.price)}</div>
                       </div>
                       {item.description && (
                         <p style={{ fontSize: 12, color: '#888888', lineHeight: 1.6, margin: 0, fontFamily: "'Jost',sans-serif", display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.description}</p>
@@ -1523,7 +1523,7 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
                               <div style={{ fontSize: isMobile ? 11 : 12, fontWeight: 400, color: '#1a1a1a', lineHeight: 1.2, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Jost',sans-serif", letterSpacing: '0.04em' }}>
                                 {item.name}
                               </div>
-                              <div style={{ fontSize: isMobile ? 13 : 18, fontWeight: 300, color: '#1a1a1a', fontFamily: "'Cormorant Garamond',Georgia,serif", flexShrink: 0, fontStyle: 'italic' }}>
+                              <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 500, color: '#d4b06a', fontFamily: "'Jost',sans-serif", flexShrink: 0}}>
                                 {toINR(portal?.calculatorState?.[item._id]?.priceOverride ?? item.price)}
                               </div>
                             </div>
@@ -2038,7 +2038,7 @@ const CostCalculator = ({ portal, wishlisted = new Set() }) => {
                         {item.category && <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: '#ccc', marginTop: 1, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{item.category}</div>}
                       </div>
                       {/* Unit price */}
-                      <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 15, color: '#888', textAlign: 'center', padding: '0 8px' }}>{INR(unitPrice)}</div>
+                      <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 15, color: '#d4b06a', textAlign: 'center', padding: '0 8px' }}>{INR(unitPrice)}</div>
                       {/* Qty input */}
                       <div style={{ display: 'flex', justifyContent: 'center', padding: '0 6px' }}>
                         <input type="number" min="0" max="99999" value={q || ''} placeholder="0"
@@ -2048,7 +2048,7 @@ const CostCalculator = ({ portal, wishlisted = new Set() }) => {
                           style={{ ...inputSt, width: 64, textAlign: 'center' }} />
                       </div>
                       {/* Line total */}
-                      <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 15, color: active ? '#b8975a' : '#ddd', textAlign: 'right', padding: '0 16px 0 0', fontStyle: active ? 'normal' : 'italic' }}>
+                      <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 15, color: active ? '#b8975a' : '#ddd', textAlign: 'right', padding: '0 16px 0 0', fontStyle: active ? 'normal' : 'italic' }}>
                         {active ? INR(line) : '—'}
                       </div>
                     </div>
@@ -2096,7 +2096,7 @@ const CostCalculator = ({ portal, wishlisted = new Set() }) => {
                     </div>
                   </div>
                   <div style={{ marginTop: 16, padding: '10px 12px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}>
-                    <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: 'rgba(255,255,255,0.22)', lineHeight: 1.7, letterSpacing: '0.04em' }}>
+                    <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: 'white', lineHeight: 1.7, letterSpacing: '0.04em' }}>
                       * Indicative estimate. Final invoice includes GST, branding / customisation, and shipping.
                     </div>
                   </div>
