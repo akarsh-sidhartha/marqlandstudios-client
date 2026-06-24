@@ -65,7 +65,6 @@ const Ic = {
   heart: <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>,
   heartO: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>,
   play: <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>,
-  chevron: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>,
 };
 
 // ── Lightbox — supports single image OR gallery navigation ───────────────────
@@ -287,31 +286,16 @@ const YouTubeEmbed = ({ url, title }) => {
 const ProductCarousel = ({ images, primaryUrl, productName, onZoom }) => {
   const all = [primaryUrl, ...images].filter(Boolean);
   const [idx, setIdx] = React.useState(0);
-  const [hovering, setHovering] = React.useState(false);
   if (all.length <= 1) return null;
 
   const prev = (e) => { e.stopPropagation(); setIdx(i => (i - 1 + all.length) % all.length); };
   const next = (e) => { e.stopPropagation(); setIdx(i => (i + 1) % all.length); };
-
-  // Plain icon, no pill/background — only visible on hover over the image.
-  const arrowBtnStyle = (side) => ({
-    position: 'absolute', [side]: 8, top: '50%', transform: 'translateY(-50%)',
-    background: 'none', border: 'none', padding: 6,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    cursor: 'pointer', color: '#fff',
-    filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.6))',
-    opacity: hovering ? 1 : 0, pointerEvents: hovering ? 'auto' : 'none',
-    transition: 'opacity 0.18s ease',
-    zIndex: 4,
-  });
 
   return (
     <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px 12px 0 0' }}>
       {/* Main image */}
       <div
         onClick={() => onZoom({ src: all[idx], alt: productName, all, startIdx: idx })}
-        onMouseEnter={() => setHovering(true)}
-        onMouseLeave={() => setHovering(false)}
         style={{ cursor: 'zoom-in', position: 'relative' }}
       >
         <img
@@ -325,14 +309,19 @@ const ProductCarousel = ({ images, primaryUrl, productName, onZoom }) => {
         />
         {/* Gradient */}
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '45%', background: 'linear-gradient(0deg,rgba(10,20,34,0.9),transparent)', pointerEvents: 'none' }} />
+      </div>
 
-        {/* Prev / Next arrows — hover-only, no background */}
-        <button onClick={prev} style={arrowBtnStyle('left')}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
-        </button>
-        <button onClick={next} style={arrowBtnStyle('right')}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
-        </button>
+      {/* Prev / Next arrows */}
+      <button onClick={prev} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.92)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 2, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#1a1a1a', zIndex: 4 }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+      </button>
+      <button onClick={next} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.92)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 2, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#1a1a1a', zIndex: 4 }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
+      </button>
+
+      {/* Counter badge */}
+      <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(255,255,255,0.92)', color: 'rgba(26,26,26,0.55)', borderRadius: 2, padding: '3px 8px', fontSize: 9, fontWeight: 400, fontFamily: "'Jost',sans-serif", letterSpacing: '0.12em', zIndex: 3 }}>
+        {idx + 1} / {all.length}
       </div>
 
       {/* Dot indicators */}
@@ -372,124 +361,6 @@ const ProductCarousel = ({ images, primaryUrl, productName, onZoom }) => {
     </div>
   );
 };
-
-// ── Combo Thumbnail Gallery ────────────────────────────────────────────────────
-// The combo's own stitched composite image (built server-side from all the
-// bundled products) is the default/main image — same as before this gallery
-// existed. Thumbnails below it are the composite itself (first) plus each
-// individual bundled product. Clicking a product thumbnail swaps the main
-// image AND swaps the name/description caption below it to that product's own
-// copy (from comboComponents, snapshotted at publish time); clicking back to
-// the first thumbnail returns to the composite view.
-const ComboThumbGallery = ({ comboImageUrl, comboName, components, onZoom, maxHeight = 280, minHeight = 180 }) => {
-  const [idx, setIdx] = React.useState(0);
-  const [hovering, setHovering] = React.useState(false);
-
-  const slides = [
-    ...(comboImageUrl ? [{ kind: 'composite', imageUrl: comboImageUrl, name: comboName }] : []),
-    ...(components || []).filter(c => c && c.imageUrl).map(c => ({ kind: 'component', ...c })),
-  ];
-
-  if (slides.length === 0) {
-    return (
-      <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f0ec', color: 'rgba(255,255,255,0.15)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', borderRadius: '12px 12px 0 0' }}>
-        No image
-      </div>
-    );
-  }
-
-  const safeIdx = Math.min(idx, slides.length - 1);
-  const active = slides[safeIdx];
-  const all = slides.map(s => s.imageUrl);
-
-  const prev = (e) => { e.stopPropagation(); setIdx(i => (i - 1 + slides.length) % slides.length); };
-  const next = (e) => { e.stopPropagation(); setIdx(i => (i + 1) % slides.length); };
-
-  // Plain icon, no pill/background — only visible on hover over the image.
-  const arrowBtnStyle = (side) => ({
-    position: 'absolute', [side]: 8, top: '50%', transform: 'translateY(-50%)',
-    background: 'none', border: 'none', padding: 6,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    cursor: 'pointer', color: '#fff',
-    filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.6))',
-    opacity: hovering ? 1 : 0, pointerEvents: hovering ? 'auto' : 'none',
-    transition: 'opacity 0.18s ease',
-    zIndex: 4,
-  });
-
-  return (
-    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px 12px 0 0' }}>
-      {/* Main image — composite by default, swaps per thumbnail click */}
-      <div
-        onClick={() => onZoom({ src: active.imageUrl, alt: active.name, all, startIdx: safeIdx })}
-        onMouseEnter={() => setHovering(true)}
-        onMouseLeave={() => setHovering(false)}
-        style={{ cursor: 'zoom-in', position: 'relative' }}
-      >
-        <img
-          src={active.imageUrl}
-          alt={active.name}
-          style={{ width: '100%', display: 'block', objectFit: 'cover', maxHeight, minHeight, transition: 'opacity 0.2s ease' }}
-        />
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '45%', background: 'linear-gradient(0deg,rgba(10,20,34,0.9),transparent)', pointerEvents: 'none' }} />
-
-        {slides.length > 1 && (
-          <>
-            <button onClick={prev} style={arrowBtnStyle('left')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
-            </button>
-            <button onClick={next} style={arrowBtnStyle('right')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* Thumbnail strip — composite first, then every bundled product. Shown
-          whenever there's more than one slide (unlike ProductCarousel's >3
-          threshold: for a combo, seeing what's inside matters even at just
-          2 items, not only once there are many). */}
-      {slides.length > 1 && (
-        <div style={{ display: 'flex', gap: 4, padding: '6px 10px', background: '#fff', borderTop: '1px solid rgba(0,0,0,0.07)', overflowX: 'auto', scrollbarWidth: 'none' }}>
-          {slides.map((s, i) => (
-            <div
-              key={s.kind === 'composite' ? 'composite' : (s.productId || i)}
-              onClick={(e) => { e.stopPropagation(); setIdx(i); }}
-              title={s.kind === 'composite' ? 'All items' : s.name}
-              style={{
-                width: 38, height: 38, borderRadius: 6, overflow: 'hidden', flexShrink: 0,
-                border: `2px solid ${i === safeIdx ? '#b8975a' : 'transparent'}`,
-                cursor: 'pointer', transition: 'border-color 0.2s',
-              }}
-            >
-              <img src={s.imageUrl} alt={s.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Active component's own name + description — swaps on thumbnail click.
-          Nothing shown for the composite slide (the combo's own name/price is
-          already in the parent card's info panel); this caption is specifically
-          about whichever individual product is currently showing. */}
-      {active.kind === 'component' && (active.name || active.description) && (
-        <div style={{ padding: '8px 10px 10px', background: '#fff', borderTop: slides.length > 1 ? 'none' : '1px solid rgba(0,0,0,0.07)' }}>
-          {active.name && (
-            <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 10.5, fontWeight: 700, color: '#1a1a1a', letterSpacing: '0.02em' }}>
-              {active.name}
-            </div>
-          )}
-          {active.description && (
-            <p style={{ fontFamily: "'Jost',sans-serif", fontSize: 10.5, color: '#888', lineHeight: 1.55, margin: '3px 0 0' }}>
-              {active.description}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
 
 // ── Property Attachment Chip (client-facing, in offsite cards) ─────────────────
 const PropAttachChip = ({ att }) => {
@@ -714,22 +585,6 @@ const ClientPortalView = () => {
   const pollTimer = useRef(null);
   const isMobile = useMobile();
 
-  // Tab bar (and the category/type filter bar just below it) dock into the nav
-  // the moment scrolling starts — all viewports, including mobile now. A small
-  // threshold rather than scrollY > 0 just avoids flicker at the very top.
-  const [scrolled, setScrolled] = useState(false);
-  const tabBarRef = useRef(null);
-  const [tabBarHeight, setTabBarHeight] = useState(57);
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-  useEffect(() => {
-    if (tabBarRef.current) setTabBarHeight(tabBarRef.current.getBoundingClientRect().height);
-  }, [isMobile, portal?.type]);
-
   const showToast = (title, body, icon) => {
     const id = Date.now();
     setToasts(p => [...p, { id, title, body, icon }]);
@@ -949,25 +804,8 @@ const ClientPortalView = () => {
         </div>
       </nav>
 
-      {/* ── Tab Bar — HomePage .sub-btn style ──
-           Docks into the nav (position: fixed, right below it) the moment
-           scrolling starts — all viewports, including mobile. The nav is
-           always position:sticky;top:0 at 68px tall, so once docked this
-           sits at top:68 and the two read as one combined header. A spacer
-           of the same height is rendered in the tab bar's normal-flow slot
-           whenever it's docked, so the content below doesn't jump when it
-           leaves flow. Applies the same way regardless of portal.type
-           (product or offsite) — nothing here branches on that. */}
-      {scrolled && <div style={{ height: tabBarHeight }} />}
-      <div
-        ref={tabBarRef}
-        style={{
-          background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.07)', padding: isMobile ? '0 16px' : '0 48px',
-          ...(scrolled
-            ? { position: 'fixed', top: 68, left: 0, right: 0, zIndex: 49, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }
-            : {}),
-        }}
-      >
+      {/* ── Tab Bar — HomePage .sub-btn style ── */}
+      <div style={{ background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.07)', padding: isMobile ? '0 16px' : '0 48px' }}>
         <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', gap: 0, overflowX: 'auto' }}>
           {[
             { k: 'catalogue', l: 'Catalogue Options', b: items.length },
@@ -1042,8 +880,8 @@ const ClientPortalView = () => {
           items.length === 0
             ? <EmptyState icon="📋" title="Options being curated" sub="The Marqland team will update this shortly." />
             : portal.type === 'product'
-              ? <ProductBento items={items} onZoom={setLightbox} wishlisted={wishlisted} onToggleWish={toggleWish} portal={portal} scrolled={scrolled} dockTop={68 + tabBarHeight} />
-              : <OffsiteCards items={items} onZoom={setLightbox} portal={portal} scrolled={scrolled} dockTop={68 + tabBarHeight} />
+              ? <ProductBento items={items} onZoom={setLightbox} wishlisted={wishlisted} onToggleWish={toggleWish} portal={portal} />
+              : <OffsiteCards items={items} onZoom={setLightbox} portal={portal} />
         )}
 
         {/* COST CALCULATOR — desktop only */}
@@ -1064,7 +902,7 @@ const ClientPortalView = () => {
                 </p>
               </div>
             </div>
-            <CostCalculator portal={portal} wishlisted={wishlisted} setTab={setTab} />
+            <CostCalculator portal={portal} wishlisted={wishlisted} />
           </div>
         )}
 
@@ -1096,55 +934,32 @@ const ClientPortalView = () => {
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap: 14 }}>
                 {sel.map((item, idx) => (
                   <GlassCard key={item._id} delay={idx * 0.04} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    {item.isCombo && (item.comboComponents || []).length > 0 ? (
-                      /* Combo — thumbnail gallery, composite image as the front/default
-                         image, swaps to a bundled product's image + caption on thumbnail
-                         click. Heart top-right (no counter badge anymore to collide
-                         with), and there's no bottom gradient/category badge since
-                         those assume a single fixed-height image, not this taller
-                         image+thumbs+caption block. */
-                      <div style={{ position: 'relative' }}>
-                        <ComboThumbGallery
-                          comboImageUrl={item.imageUrl}
-                          comboName={item.name}
-                          components={item.comboComponents}
-                          onZoom={setLightbox}
-                          maxHeight={200}
-                          minHeight={160}
-                        />
-                        <button onClick={e => { e.stopPropagation(); toggleWish(String(item._id)); }}
-                          style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(220,53,69,0.82)', border: 'none', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', backdropFilter: 'blur(6px)', zIndex: 5 }}>
-                          {Ic.heart}
-                        </button>
+                    {/* Image */}
+                    <div style={{ position: 'relative', height: 200, flexShrink: 0, overflow: 'hidden', borderRadius: '12px 12px 0 0', cursor: item.imageUrl ? 'zoom-in' : 'default' }}
+                      onClick={() => { if (item.imageUrl) setLightbox({ src: item.imageUrl, alt: item.name }); }}>
+                      {item.imageUrl
+                        ? <img src={item.imageUrl} alt={item.name} className="img-hover" style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform .4s ease' }} />
+                        : <div style={{ width: '100%', height: '100%', background: '#f3f0ec', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>No image</div>
+                      }
+                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg,rgba(10,20,34,0.82) 0%,transparent 48%)', pointerEvents: 'none' }} />
+                      {/* Badges */}
+                      <div style={{ position: 'absolute', bottom: 10, left: 10, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                        {item.category && <span style={{ background: 'rgba(184,151,90,0.88)', color: '#0e1520', fontSize: 8, fontWeight: 800, padding: '3px 7px', borderRadius: 4, backdropFilter: 'blur(4px)', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: "'Jost',sans-serif" }}>{item.category}</span>}
+                        {item.subCategory && <span style={{ background: 'rgba(255,255,255,0.14)', color: 'rgba(255,255,255,0.85)', fontSize: 8, fontWeight: 700, padding: '3px 7px', borderRadius: 4, backdropFilter: 'blur(4px)', textTransform: 'uppercase', fontFamily: "'Jost',sans-serif" }}>{item.subCategory}</span>}
                       </div>
-                    ) : (
-                      /* Image */
-                      <div style={{ position: 'relative', height: 200, flexShrink: 0, overflow: 'hidden', borderRadius: '12px 12px 0 0', cursor: item.imageUrl ? 'zoom-in' : 'default' }}
-                        onClick={() => { if (item.imageUrl) setLightbox({ src: item.imageUrl, alt: item.name }); }}>
-                        {item.imageUrl
-                          ? <img src={item.imageUrl} alt={item.name} className="img-hover" style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform .4s ease' }} />
-                          : <div style={{ width: '100%', height: '100%', background: '#f3f0ec', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>No image</div>
-                        }
-                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg,rgba(10,20,34,0.82) 0%,transparent 48%)', pointerEvents: 'none' }} />
-                        {/* Badges */}
-                        <div style={{ position: 'absolute', bottom: 10, left: 10, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                          {item.category && <span style={{ background: 'rgba(184,151,90,0.88)', color: '#0e1520', fontSize: 8, fontWeight: 800, padding: '3px 7px', borderRadius: 4, backdropFilter: 'blur(4px)', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: "'Jost',sans-serif" }}>{item.category}</span>}
-                          {item.subCategory && <span style={{ background: 'rgba(255,255,255,0.14)', color: 'rgba(255,255,255,0.85)', fontSize: 8, fontWeight: 700, padding: '3px 7px', borderRadius: 4, backdropFilter: 'blur(4px)', textTransform: 'uppercase', fontFamily: "'Jost',sans-serif" }}>{item.subCategory}</span>}
-                        </div>
-                        {/* Remove heart */}
-                        <button onClick={e => { e.stopPropagation(); toggleWish(String(item._id)); }}
-                          style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(220,53,69,0.82)', border: 'none', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', backdropFilter: 'blur(6px)' }}>
-                          {Ic.heart}
-                        </button>
-                      </div>
-                    )}
+                      {/* Remove heart */}
+                      <button onClick={e => { e.stopPropagation(); toggleWish(String(item._id)); }}
+                        style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(220,53,69,0.82)', border: 'none', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', backdropFilter: 'blur(6px)' }}>
+                        {Ic.heart}
+                      </button>
+                    </div>
                     {/* Info — same layout as catalogue bento card */}
                     <div style={{ padding: '14px 16px 16px', background: '#ffffff', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', lineHeight: 1.2, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Jost',sans-serif" }}>{item.name}</div>
                         <div style={{ fontSize: 15, fontWeight: 700, color: '#d4b06a', fontFamily: "'Jost',sans-serif", flexShrink: 0 }}>{toINR(portal?.calculatorState?.[item._id]?.priceOverride ?? item.price)}</div>
                       </div>
-                      {!item.isCombo && item.description && (
+                      {item.description && (
                         <p style={{ fontSize: 12, color: '#888888', lineHeight: 1.6, margin: 0, fontFamily: "'Jost',sans-serif", display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.description}</p>
                       )}
                     </div>
@@ -1497,20 +1312,12 @@ const ClientPortalView = () => {
 
 
 
-const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = () => { }, portal = null, scrolled = false, dockTop = 68 }) => {
+const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = () => { }, portal = null }) => {
   const [activeCategory, setActiveCategory] = React.useState(null);
   const [activeSubCat, setActiveSubCat] = React.useState(null);
   const [imgSpans, setImgSpans] = React.useState({});
   const [hoveredId, setHoveredId] = React.useState(null);
   const isMobile = useMobile();
-
-  // Category/sub-category filter bar docks right below the tab bar once
-  // scrolled — same mechanism as the tab bar itself (see the main component).
-  const filterBarRef = React.useRef(null);
-  const [filterBarHeight, setFilterBarHeight] = React.useState(70);
-  React.useEffect(() => {
-    if (filterBarRef.current) setFilterBarHeight(filterBarRef.current.getBoundingClientRect().height);
-  }, [isMobile, activeCategory, activeSubCat]);
 
   const handleImgLoad = (id, e) => {
     const { naturalWidth: w, naturalHeight: h } = e.target;
@@ -1552,38 +1359,29 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
 
   return (
     <div>
-      {/* Filter bar — surface-container tonal panel. Docks right below the tab
-          bar (itself docked under the nav) once scrolled — same mechanism,
-          one level down. Needs its own maxWidth/padding wrapper here because
-          once it's position:fixed it escapes the parent "Content" wrapper
-          that normally centers it. */}
-      {scrolled && <div style={{ height: filterBarHeight + (isMobile ? 16 : 32) }} />}
-      <div style={scrolled ? { position: 'fixed', top: dockTop, left: 0, right: 0, zIndex: 48, background: '#faf8f5' } : undefined}>
-        <div style={scrolled ? { maxWidth: 1400, margin: '0 auto', padding: isMobile ? '10px 16px' : '14px 48px' } : undefined}>
-          <div ref={filterBarRef} style={{ marginBottom: scrolled ? 0 : (isMobile ? 16 : 32), padding: isMobile ? '14px 16px' : '18px 22px', background: '#ffffff', borderRadius: 12, boxShadow: scrolled ? '0 4px 16px rgba(0,0,0,0.08)' : 'none' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-              <span style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.12em', marginRight: 6, fontFamily: "'Jost',sans-serif" }}>Category</span>
-              {categories.map(cat => (
-                <button key={cat} style={chip(activeCategory === cat)}
-                  onClick={() => { if (activeCategory === cat) { setActiveCategory(null); setActiveSubCat(null); } else { setActiveCategory(cat); setActiveSubCat(null); } }}>
-                  {cat}
-                </button>
-              ))}
-            </div>
-            {activeCategory && subCats.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.06)', alignItems: 'center' }}>
-                <span style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.12em', marginRight: 6, fontFamily: "'Jost',sans-serif" }}>Type</span>
-                {subCats.map(sc => (
-                  <button key={sc} style={subChip(activeSubCat === sc)} onClick={() => setActiveSubCat(activeSubCat === sc ? null : sc)}>{sc}</button>
-                ))}
-              </div>
-            )}
-            <div style={{ marginTop: 10, fontSize: 12, color: '#888888', fontFamily: "'Jost',sans-serif" }}>
-              <span style={{ fontWeight: 700, color: '#b8975a' }}>{filtered.length}</span>
-              {' '}option{filtered.length !== 1 ? 's' : ''} curated for you
-              {activeCategory && <span style={{ color: 'rgba(255,255,255,0.25)' }}> in <span style={{ color: '#b8975a' }}>{activeCategory}</span>{activeSubCat ? ` › ${activeSubCat}` : ''}</span>}
-            </div>
+      {/* Filter bar — surface-container tonal panel */}
+      <div style={{ marginBottom: isMobile ? 16 : 32, padding: isMobile ? '14px 16px' : '18px 22px', background: '#ffffff', borderRadius: 12 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.12em', marginRight: 6, fontFamily: "'Jost',sans-serif" }}>Category</span>
+          {categories.map(cat => (
+            <button key={cat} style={chip(activeCategory === cat)}
+              onClick={() => { if (activeCategory === cat) { setActiveCategory(null); setActiveSubCat(null); } else { setActiveCategory(cat); setActiveSubCat(null); } }}>
+              {cat}
+            </button>
+          ))}
+        </div>
+        {activeCategory && subCats.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.06)', alignItems: 'center' }}>
+            <span style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.12em', marginRight: 6, fontFamily: "'Jost',sans-serif" }}>Type</span>
+            {subCats.map(sc => (
+              <button key={sc} style={subChip(activeSubCat === sc)} onClick={() => setActiveSubCat(activeSubCat === sc ? null : sc)}>{sc}</button>
+            ))}
           </div>
+        )}
+        <div style={{ marginTop: 10, fontSize: 12, color: '#888888', fontFamily: "'Jost',sans-serif" }}>
+          <span style={{ fontWeight: 700, color: '#b8975a' }}>{filtered.length}</span>
+          {' '}option{filtered.length !== 1 ? 's' : ''} curated for you
+          {activeCategory && <span style={{ color: 'rgba(255,255,255,0.25)' }}> in <span style={{ color: '#b8975a' }}>{activeCategory}</span>{activeSubCat ? ` › ${activeSubCat}` : ''}</span>}
         </div>
       </div>
 
@@ -1641,17 +1439,8 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
                           {/* ── Image area (carousel or single) ── */}
                           <div style={{ position: 'relative', flexShrink: 0, overflow: 'hidden' }}>
 
-                            {/* Combo / carousel / single image */}
-                            {item.isCombo && (item.comboComponents || []).length > 0 ? (
-                              <ComboThumbGallery
-                                comboImageUrl={item.imageUrl}
-                                comboName={item.name}
-                                components={item.comboComponents}
-                                onZoom={onZoom}
-                                maxHeight={isMobile ? 200 : (span === 'wide' ? 320 : 280)}
-                                minHeight={isMobile ? 140 : 180}
-                              />
-                            ) : (item.additionalImages || []).length > 0 ? (
+                            {/* Carousel or single image */}
+                            {(item.additionalImages || []).length > 0 ? (
                               <ProductCarousel
                                 images={item.additionalImages}
                                 primaryUrl={item.imageUrl}
@@ -1681,13 +1470,12 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
                               </div>
                             )}
 
-                            {/* Heart — top-right for all items now (no counter badge left
-                                anywhere to collide with). */}
+                            {/* Heart */}
                             <button
                               onClick={e => { e.stopPropagation(); onToggleWish(String(item._id)); }}
                               title={loved ? 'Remove from shortlist' : 'Add to shortlist'}
                               style={{
-                                position: 'absolute', top: 10, right: 10, zIndex: 10,
+                                position: 'absolute', top: 10, left: 10, zIndex: 10,
                                 background: loved ? 'rgba(220,53,69,0.88)' : 'rgba(255,255,255,0.92)',
                                 border: `1px solid ${loved ? 'rgba(220,53,69,0.3)' : 'rgba(0,0,0,0.1)'}`,
                                 borderRadius: 2, width: 32, height: 32,
@@ -1700,11 +1488,8 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
 
                             {/* Description overlay — absolutely positioned over the image.
                                 Slides up when hoveredId matches. Stays open while mouse
-                                is anywhere inside the card (onMouseLeave is on the card).
-                                Skipped for combos — ComboThumbGallery already shows the
-                                active component's description, and this overlay's bottom:0
-                                anchor would otherwise land oddly over that taller block. */}
-                            {!item.isCombo && item.description && (
+                                is anywhere inside the card (onMouseLeave is on the card). */}
+                            {item.description && (
                               <div
                                 onClick={e => e.stopPropagation()}
                                 style={{
@@ -1743,12 +1528,8 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
                               </div>
                             </div>
 
-                            {/* Row 2: Description — 3 lines, hover to open overlay.
-                                Skipped for combos: the combo's own item.description is just
-                                an auto-generated "Product A + Product B" join string, and
-                                ComboThumbGallery already surfaces each real component's
-                                actual description as its thumbnails are clicked. */}
-                            {!item.isCombo && item.description && (
+                            {/* Row 2: Description — 3 lines, hover to open overlay */}
+                            {item.description && (
                               <p
                                 onMouseEnter={() => setHoveredId(item._id)}
                                 style={{
@@ -1809,18 +1590,10 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
 // Day Outing : same layout but info panel height is natural (no clamp),
 //              full description shown, packages expand in full-width section below
 // ─────────────────────────────────────────────────────────────────────────────
-const OffsiteCards = ({ items, onZoom, portal, scrolled = false, dockTop = 68 }) => {
+const OffsiteCards = ({ items, onZoom, portal }) => {
   const isMobile = useMobile();
   const [typeFilter, setTypeFilter] = React.useState('all');
   const calcState = portal?.calculatorState || {};
-
-  // Type filter bar docks right below the tab bar once scrolled — same
-  // mechanism as ProductBento's category filter bar.
-  const filterBarRef = React.useRef(null);
-  const [filterBarHeight, setFilterBarHeight] = React.useState(56);
-  React.useEffect(() => {
-    if (filterBarRef.current) setFilterBarHeight(filterBarRef.current.getBoundingClientRect().height);
-  }, [isMobile]);
 
   const hasDay = items.some(i => i.type !== 'Night Stay');
   const hasNight = items.some(i => i.type === 'Night Stay');
@@ -1840,33 +1613,26 @@ const OffsiteCards = ({ items, onZoom, portal, scrolled = false, dockTop = 68 })
     <div>
       {/* Type filter — only shown when both types are present */}
       {hasBoth && (
-        <>
-          {scrolled && <div style={{ height: filterBarHeight + 20 }} />}
-          <div style={scrolled ? { position: 'fixed', top: dockTop, left: 0, right: 0, zIndex: 48, background: '#faf8f5' } : undefined}>
-            <div style={scrolled ? { maxWidth: 1400, margin: '0 auto', padding: isMobile ? '10px 16px' : '14px 48px' } : undefined}>
-              <div ref={filterBarRef} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: scrolled ? 0 : 20, padding: '12px 16px', background: '#ffffff', borderRadius: 12, flexWrap: 'wrap', boxShadow: scrolled ? '0 4px 16px rgba(0,0,0,0.08)' : 'none' }}>
-                <span style={{ fontSize: 9, fontWeight: 800, color: '#888888', textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Jost',sans-serif", marginRight: 4 }}>Filter</span>
-                {[
-                  { k: 'all', l: `All (${items.length})` },
-                  { k: 'day', l: `☀️ Day Outing (${items.filter(i => i.type !== 'Night Stay').length})` },
-                  { k: 'night', l: `🌙 Night Stay (${items.filter(i => i.type === 'Night Stay').length})` },
-                ].map(opt => (
-                  <button key={opt.k} onClick={() => setTypeFilter(opt.k)}
-                    style={{
-                      padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer',
-                      fontSize: 11, fontWeight: 700, fontFamily: "'Jost',sans-serif", transition: 'all .18s',
-                      background: typeFilter === opt.k ? GOLD_GRAD : 'transparent',
-                      color: typeFilter === opt.k ? '#0e1520' : '#888',
-                      boxShadow: typeFilter === opt.k ? '0 4px 16px rgba(184,151,90,0.3)' : 'none',
-                      outline: typeFilter === opt.k ? 'none' : '1px solid rgba(255,255,255,0.12)',
-                    }}>
-                    {opt.l}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, padding: '12px 16px', background: '#ffffff', borderRadius: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 9, fontWeight: 800, color: '#888888', textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Jost',sans-serif", marginRight: 4 }}>Filter</span>
+          {[
+            { k: 'all', l: `All (${items.length})` },
+            { k: 'day', l: `☀️ Day Outing (${items.filter(i => i.type !== 'Night Stay').length})` },
+            { k: 'night', l: `🌙 Night Stay (${items.filter(i => i.type === 'Night Stay').length})` },
+          ].map(opt => (
+            <button key={opt.k} onClick={() => setTypeFilter(opt.k)}
+              style={{
+                padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                fontSize: 11, fontWeight: 700, fontFamily: "'Jost',sans-serif", transition: 'all .18s',
+                background: typeFilter === opt.k ? GOLD_GRAD : 'transparent',
+                color: typeFilter === opt.k ? '#0e1520' : '#888',
+                boxShadow: typeFilter === opt.k ? '0 4px 16px rgba(184,151,90,0.3)' : 'none',
+                outline: typeFilter === opt.k ? 'none' : '1px solid rgba(255,255,255,0.12)',
+              }}>
+              {opt.l}
+            </button>
+          ))}
+        </div>
       )}
       <p style={{ fontSize: 12, color: '#888888', marginBottom: 20, fontWeight: 600, fontFamily: "'Jost',sans-serif" }}>{visible.length} propert{visible.length !== 1 ? 'ies' : 'y'} selected for you</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -2048,7 +1814,7 @@ const OffsiteCards = ({ items, onZoom, portal, scrolled = false, dockTop = 68 })
 // UNIFIED COST CALCULATOR
 // One component for both portal types. Desktop/tablet only.
 // ═════════════════════════════════════════════════════════════════════════════
-const CostCalculator = ({ portal, wishlisted = new Set(), setTab }) => {
+const CostCalculator = ({ portal, wishlisted = new Set() }) => {
   const INR = v => `₹${Number(v || 0).toLocaleString('en-IN')}`;
   const slug = portal.slug;
   const isProduct = portal.type === 'product';
@@ -2070,26 +1836,6 @@ const CostCalculator = ({ portal, wishlisted = new Set(), setTab }) => {
     const n = Math.max(0, Math.min(99999, Number(val) || 0));
     setQty(prev => ({ ...prev, [id]: n }));
   };
-
-  // Per-row expand state — combo rows reveal each bundled product's thumbnail,
-  // non-combo rows reveal the description + thumbnails (when there's more than
-  // one image). Keyed by item._id, same pattern as qty above.
-  //
-  // Two rows start pre-expanded (computed once, on mount, from the initial
-  // shortlist — not kept in sync afterward, so a manual collapse later isn't
-  // fought by a re-render): the first combo, and — separately — the first
-  // non-combo item that actually has more than one image.
-  const [expandedRows, setExpandedRows] = React.useState(() => {
-    const initial = {};
-    const firstCombo = shortlisted.find(i => i.isCombo && (i.comboComponents || []).length > 0);
-    if (firstCombo) initial[firstCombo._id] = true;
-    const firstMultiImage = shortlisted.find(i =>
-      !i.isCombo && [i.imageUrl, ...(i.additionalImages || [])].filter(Boolean).length > 1
-    );
-    if (firstMultiImage) initial[firstMultiImage._id] = true;
-    return initial;
-  });
-  const toggleRow = (id) => setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
 
   const pLines = productItems.map(i => ({ ...i, q: qty[i._id] || 0, line: (qty[i._id] || 0) * (i.price || 0) }));
   const pTotal = pLines.reduce((s, l) => s + l.line, 0);
@@ -2249,16 +1995,16 @@ const CostCalculator = ({ portal, wishlisted = new Set(), setTab }) => {
                 <p style={{ fontFamily: "'Jost',sans-serif", fontSize: 11, color: '#aaa', letterSpacing: '0.1em', lineHeight: 1.7, maxWidth: 340, margin: '0 auto 28px' }}>
                   Shortlist products from the Catalogue tab using the ♡ button — they will appear here for you to add quantities.
                 </p>
-                <button onClick={() => setTab('catalogue')} style={{ padding: '10px 24px', border: '1px solid rgba(184,151,90,0.35)', background: 'transparent', cursor: 'pointer', fontFamily: "'Jost',sans-serif", fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#b8975a' }}>
+                <button onClick={() => { }} style={{ padding: '10px 24px', border: '1px solid rgba(184,151,90,0.35)', background: 'transparent', cursor: 'pointer', fontFamily: "'Jost',sans-serif", fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#b8975a' }}>
                   ← Go to Catalogue
                 </button>
               </div>
             ) : (
               <div>
                 {/* Table header */}
-                <div style={{ display: 'grid', gridTemplateColumns: '28px 56px 1fr 120px 80px 110px', gap: 0, padding: '8px 16px', background: '#f7f5f1', borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
-                  {[['', 'left'], ['', 'left'], ['Product', 'left'], ['Unit Price', 'center'], ['Qty', 'center'], ['Amount', 'right']].map(([h, align], i) => (
-                    <span key={i} style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: '#aaa', letterSpacing: '0.2em', textTransform: 'uppercase', textAlign: align }}>{h}</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr 120px 80px 110px', gap: 0, padding: '8px 16px', background: '#f7f5f1', borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
+                  {[['', 'left'], ['Product', 'left'], ['Unit Price', 'center'], ['Qty', 'center'], ['Amount', 'right']].map(([h, align]) => (
+                    <span key={h} style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: '#aaa', letterSpacing: '0.2em', textTransform: 'uppercase', textAlign: align }}>{h}</span>
                   ))}
                 </div>
 
@@ -2268,121 +2014,44 @@ const CostCalculator = ({ portal, wishlisted = new Set(), setTab }) => {
                   const unitPrice = portal?.calculatorState?.[item._id]?.priceOverride ?? (item.price || 0);
                   const line = q * unitPrice;
                   const active = q > 0;
-                  const rowBg = active ? 'rgba(184,151,90,0.04)' : idx % 2 === 0 ? '#fff' : '#faf8f5';
-
-                  // Combos expand to show each bundled product's thumbnail. Non-combos
-                  // expand to show the description and, if there's more than one image
-                  // (primary + additionalImages), thumbnails of those too. Rows with
-                  // neither get no chevron at all — nothing to expand into.
-                  const galleryImgs = [item.imageUrl, ...(item.additionalImages || [])].filter(Boolean);
-                  const canExpand = item.isCombo
-                    ? (item.comboComponents || []).length > 0
-                    : (!!item.description || galleryImgs.length > 1);
-                  const isExpanded = !!expandedRows[item._id];
-
                   return (
-                    <React.Fragment key={item._id}>
-                      <div
-                        onClick={() => { if (canExpand) toggleRow(item._id); }}
-                        style={{
-                          display: 'grid', gridTemplateColumns: '28px 56px 1fr 120px 80px 110px', gap: 0,
-                          alignItems: 'center',
-                          background: rowBg,
-                          borderLeft: active ? '3px solid #b8975a' : '3px solid transparent',
-                          borderBottom: isExpanded ? 'none' : '1px solid rgba(0,0,0,0.05)',
-                          transition: 'background .15s, border-color .15s',
-                          minHeight: 64,
-                          cursor: canExpand ? 'pointer' : 'default',
-                        }}>
-                        {/* Expand toggle — visual indicator; the click handler lives on the
-                            whole row above, this just stops its own click from bubbling
-                            and double-toggling. */}
-                        <div style={{ display: 'flex', justifyContent: 'center' }}>
-                          {canExpand && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); toggleRow(item._id); }}
-                              title={isExpanded ? 'Collapse' : (item.isCombo ? "Show what's in this combo" : 'Show details')}
-                              style={{
-                                background: 'none', border: 'none', cursor: 'pointer', padding: 4,
-                                color: isExpanded ? '#b8975a' : '#bbb',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                                transition: 'transform .2s, color .15s',
-                              }}
-                            >
-                              {Ic.chevron}
-                            </button>
-                          )}
-                        </div>
-                        {/* Product image — fixed 56×64 */}
-                        <div style={{ width: 56, height: 64, flexShrink: 0, overflow: 'hidden', background: '#f3f0ec' }}>
-                          {item.imageUrl
-                            ? <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                            : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#ddd' }}>□</div>
-                          }
-                        </div>
-                        {/* Name + subcat */}
-                        <div style={{ padding: '0 14px' }}>
-                          <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 15, color: '#1a1a1a', lineHeight: 1.2 }}>{item.name}</div>
-                          {item.subCategory && <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 10, color: '#aaa', marginTop: 2, letterSpacing: '0.08em' }}>{item.subCategory}</div>}
-                          {item.category && <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: '#ccc', marginTop: 1, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{item.category}</div>}
-                        </div>
-                        {/* Unit price */}
-                        <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 15, color: '#d4b06a', textAlign: 'center', padding: '0 8px' }}>{INR(unitPrice)}</div>
-                        {/* Qty input — click/focus here must not toggle the row */}
-                        <div style={{ display: 'flex', justifyContent: 'center', padding: '0 6px' }} onClick={e => e.stopPropagation()}>
-                          <input type="number" min="0" max="99999" value={q || ''} placeholder="0"
-                            onChange={e => setQ(item._id, e.target.value)}
-                            onFocus={e => e.target.style.borderColor = '#b8975a'}
-                            onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.12)'}
-                            style={{ ...inputSt, width: 64, textAlign: 'center' }} />
-                        </div>
-                        {/* Line total */}
-                        <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 15, color: active ? '#b8975a' : '#ddd', textAlign: 'right', padding: '0 16px 0 0', fontStyle: active ? 'normal' : 'italic' }}>
-                          {active ? INR(line) : '—'}
-                        </div>
+                    <div key={item._id} style={{
+                      display: 'grid', gridTemplateColumns: '56px 1fr 120px 80px 110px', gap: 0,
+                      alignItems: 'center',
+                      background: active ? 'rgba(184,151,90,0.04)' : idx % 2 === 0 ? '#fff' : '#faf8f5',
+                      borderLeft: active ? '3px solid #b8975a' : '3px solid transparent',
+                      borderBottom: '1px solid rgba(0,0,0,0.05)',
+                      transition: 'background .15s, border-color .15s',
+                      minHeight: 64,
+                    }}>
+                      {/* Product image — fixed 56×64 */}
+                      <div style={{ width: 56, height: 64, flexShrink: 0, overflow: 'hidden', background: '#f3f0ec' }}>
+                        {item.imageUrl
+                          ? <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#ddd' }}>□</div>
+                        }
                       </div>
-
-                      {/* Expanded content */}
-                      {isExpanded && canExpand && (
-                        <div style={{ padding: '14px 16px 16px 84px', background: rowBg, borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                          {item.isCombo ? (
-                            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                              {(item.comboComponents || []).map((c, i) => (
-                                <div key={c.productId || i} style={{ width: 64, textAlign: 'center' }}>
-                                  <div style={{ width: 64, height: 64, borderRadius: 6, overflow: 'hidden', background: '#f3f0ec', marginBottom: 4 }}>
-                                    {c.imageUrl
-                                      ? <img src={c.imageUrl} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                                      : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: '#ddd' }}>□</div>
-                                    }
-                                  </div>
-                                  <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: '#888', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                                    {c.name}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div>
-                              {item.description && (
-                                <p style={{ fontFamily: "'Jost',sans-serif", fontSize: 12, color: '#888', lineHeight: 1.6, margin: galleryImgs.length > 1 ? '0 0 12px' : 0 }}>
-                                  {item.description}
-                                </p>
-                              )}
-                              {galleryImgs.length > 1 && (
-                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                  {galleryImgs.map((src, i) => (
-                                    <div key={i} style={{ width: 56, height: 56, borderRadius: 6, overflow: 'hidden', background: '#f3f0ec' }}>
-                                      <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </React.Fragment>
+                      {/* Name + subcat */}
+                      <div style={{ padding: '0 14px' }}>
+                        <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 15, color: '#1a1a1a', lineHeight: 1.2 }}>{item.name}</div>
+                        {item.subCategory && <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 10, color: '#aaa', marginTop: 2, letterSpacing: '0.08em' }}>{item.subCategory}</div>}
+                        {item.category && <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: '#ccc', marginTop: 1, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{item.category}</div>}
+                      </div>
+                      {/* Unit price */}
+                      <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 15, color: '#d4b06a', textAlign: 'center', padding: '0 8px' }}>{INR(unitPrice)}</div>
+                      {/* Qty input */}
+                      <div style={{ display: 'flex', justifyContent: 'center', padding: '0 6px' }}>
+                        <input type="number" min="0" max="99999" value={q || ''} placeholder="0"
+                          onChange={e => setQ(item._id, e.target.value)}
+                          onFocus={e => e.target.style.borderColor = '#b8975a'}
+                          onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.12)'}
+                          style={{ ...inputSt, width: 64, textAlign: 'center' }} />
+                      </div>
+                      {/* Line total */}
+                      <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 15, color: active ? '#b8975a' : '#ddd', textAlign: 'right', padding: '0 16px 0 0', fontStyle: active ? 'normal' : 'italic' }}>
+                        {active ? INR(line) : '—'}
+                      </div>
+                    </div>
                   );
                 })}
 
