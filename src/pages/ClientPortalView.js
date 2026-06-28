@@ -283,16 +283,41 @@ const YouTubeEmbed = ({ url, title }) => {
 // ── Product Image Carousel ────────────────────────────────────────────────────
 // Shows additionalImages as swipeable dots-nav carousel below primary image.
 // Only rendered when there are ≥1 additional images.
+// CHANGES: arrows are hover-only (no white box background), counter badge removed.
 const ProductCarousel = ({ images, primaryUrl, productName, onZoom }) => {
   const all = [primaryUrl, ...images].filter(Boolean);
   const [idx, setIdx] = React.useState(0);
+  const [hovered, setHovered] = React.useState(false);
   if (all.length <= 1) return null;
 
   const prev = (e) => { e.stopPropagation(); setIdx(i => (i - 1 + all.length) % all.length); };
   const next = (e) => { e.stopPropagation(); setIdx(i => (i + 1) % all.length); };
 
+  const arrowBtn = (side, handler, points) => (
+    <button onClick={handler} style={{
+      position: 'absolute', [side]: 6, top: '50%', transform: 'translateY(-50%)',
+      background: 'rgba(0,0,0,0.32)', border: 'none',
+      width: 32, height: 32, borderRadius: '50%',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      cursor: 'pointer', zIndex: 4,
+      color: '#fff',
+      opacity: hovered ? 1 : 0,
+      transform: hovered ? 'translateY(-50%) scale(1.15)' : 'translateY(-50%) scale(1)',
+      transition: 'opacity .18s, transform .18s',
+      backdropFilter: 'blur(4px)',
+    }}>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points={points} />
+      </svg>
+    </button>
+  );
+
   return (
-    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px 12px 0 0' }}>
+    <div
+      style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px 12px 0 0' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       {/* Main image */}
       <div
         onClick={() => onZoom({ src: all[idx], alt: productName, all, startIdx: idx })}
@@ -301,28 +326,15 @@ const ProductCarousel = ({ images, primaryUrl, productName, onZoom }) => {
         <img
           src={all[idx]}
           alt={`${productName} — image ${idx + 1}`}
-          style={{
-            width: '100%', display: 'block', objectFit: 'cover',
-            maxHeight: 280, minHeight: 180,
-            transition: 'opacity 0.25s ease',
-          }}
+          style={{ width: '100%', height: 'auto', display: 'block', minHeight: 180, transition: 'opacity 0.25s ease' }}
         />
         {/* Gradient */}
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '45%', background: 'linear-gradient(0deg,rgba(10,20,34,0.9),transparent)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '40%', background: 'linear-gradient(0deg,rgba(10,20,34,0.7),transparent)', pointerEvents: 'none' }} />
       </div>
 
-      {/* Prev / Next arrows */}
-      <button onClick={prev} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.92)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 2, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#1a1a1a', zIndex: 4 }}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
-      </button>
-      <button onClick={next} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.92)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 2, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#1a1a1a', zIndex: 4 }}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
-      </button>
-
-      {/* Counter badge */}
-      <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(255,255,255,0.92)', color: 'rgba(26,26,26,0.55)', borderRadius: 2, padding: '3px 8px', fontSize: 9, fontWeight: 400, fontFamily: "'Jost',sans-serif", letterSpacing: '0.12em', zIndex: 3 }}>
-        {idx + 1} / {all.length}
-      </div>
+      {/* Prev / Next arrows — hover-only, rounded pill with blur */}
+      {arrowBtn('left', prev, '15 18 9 12 15 6')}
+      {arrowBtn('right', next, '9 18 15 12 9 6')}
 
       {/* Dot indicators */}
       <div style={{ position: 'absolute', bottom: 10, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 5, zIndex: 4 }}>
@@ -332,7 +344,7 @@ const ProductCarousel = ({ images, primaryUrl, productName, onZoom }) => {
             onClick={(e) => { e.stopPropagation(); setIdx(i); }}
             style={{
               width: i === idx ? 18 : 6, height: 6, borderRadius: 3, border: 'none',
-              background: i === idx ? '#b8975a' : 'rgba(255,255,255,0.3)',
+              background: i === idx ? '#b8975a' : 'rgba(255,255,255,0.45)',
               cursor: 'pointer', padding: 0,
               transition: 'all 0.25s ease',
             }}
@@ -340,24 +352,24 @@ const ProductCarousel = ({ images, primaryUrl, productName, onZoom }) => {
         ))}
       </div>
 
-      {/* Thumbnail strip — bottom of card, visible when many images */}
-      {all.length > 3 && (
-        <div style={{ display: 'flex', gap: 4, padding: '6px 10px', background: '#fff', borderTop: '1px solid rgba(0,0,0,0.07)', overflowX: 'auto', scrollbarWidth: 'none' }}>
-          {all.map((src, i) => (
-            <div
-              key={i}
-              onClick={(e) => { e.stopPropagation(); setIdx(i); }}
-              style={{
-                width: 38, height: 38, borderRadius: 6, overflow: 'hidden', flexShrink: 0,
-                border: `2px solid ${i === idx ? '#b8975a' : 'transparent'}`,
-                cursor: 'pointer', transition: 'border-color 0.2s',
-              }}
-            >
-              <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Thumbnail strip — shown whenever there are ≥2 images */}
+      <div style={{ display: 'flex', gap: 4, padding: '6px 10px', background: '#fff', borderTop: '1px solid rgba(0,0,0,0.07)', overflowX: 'auto', scrollbarWidth: 'none' }}>
+        {all.map((src, i) => (
+          <div
+            key={i}
+            onClick={(e) => { e.stopPropagation(); setIdx(i); }}
+            style={{
+              width: 38, height: 38, borderRadius: 6, overflow: 'hidden', flexShrink: 0,
+              border: `2px solid ${i === idx ? '#b8975a' : 'rgba(0,0,0,0.08)'}`,
+              cursor: 'pointer', transition: 'border-color 0.2s',
+              outline: i === idx ? '1px solid rgba(184,151,90,0.3)' : 'none',
+              outlineOffset: 1,
+            }}
+          >
+            <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
@@ -704,6 +716,8 @@ const ClientPortalView = () => {
     .desc-scroll::-webkit-scrollbar-thumb{background:rgba(184,151,90,0.5);border-radius:10px}
     .desc-scroll{scrollbar-width:thin;scrollbar-color:rgba(184,151,90,0.5) rgba(0,0,0,0.04)}
     textarea{resize:none}
+    input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+    input[type=number]{-moz-appearance:textfield}
     .img-hover:hover{transform:scale(1.04)!important}
     .ghost-btn:hover{background:rgba(0,0,0,0.04)!important}
     .ms-pill{display:inline-block;padding:5px 18px;border:1px solid rgba(184,151,90,0.4);font-size:9px;font-weight:400;letter-spacing:0.25em;text-transform:uppercase;color:#b8975a;font-family:'Jost',sans-serif}
@@ -804,11 +818,11 @@ const ClientPortalView = () => {
         </div>
       </nav>
 
-      {/* ── Tab Bar — HomePage .sub-btn style ── */}
-      <div style={{ background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.07)', padding: isMobile ? '0 16px' : '0 48px' }}>
+      {/* ── Tab Bar — sticky below nav ── */}
+      <div style={{ position: 'sticky', top: 68, zIndex: 40, background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.07)', padding: isMobile ? '0 16px' : '0 48px' }}>
         <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', gap: 0, overflowX: 'auto' }}>
           {[
-            { k: 'catalogue', l: 'Catalogue Options', b: items.length },
+            { k: 'catalogue', l: 'Catalogue Options', b: items.length + (portal.comboItems||[]).length },
             ...(portal.type === 'product' ? [{ k: 'selected', l: 'Selected Items', b: wishlisted.size || null }] : []),
             ...(!isMobile ? [{ k: 'calculator', l: 'Cost Calculator', b: null }] : []),
             ...(portal.type === 'product' && !isMobile ? [{ k: 'shipments', l: 'Shipment Tracking', b: null }] : []),
@@ -843,7 +857,7 @@ const ClientPortalView = () => {
       </div>
 
       {/* ── Hero — navy grain like HomePage ── */}
-      {tab === 'catalogue' && (
+      {(tab === 'catalogue') && (
         <div className="ms-grain" style={{ background: 'linear-gradient(155deg,#0c1220 0%,#111a28 60%,#0e1824 100%)', padding: isMobile ? '40px 20px 32px' : '64px 48px 52px', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: '-20%', right: '5%', width: 400, height: 400, border: '1px solid rgba(184,151,90,0.05)', borderRadius: '50%', pointerEvents: 'none' }} />
           <div style={{ position: 'absolute', top: '-25%', right: '2%', width: 560, height: 560, border: '1px solid rgba(184,151,90,0.03)', borderRadius: '50%', pointerEvents: 'none' }} />
@@ -865,7 +879,7 @@ const ClientPortalView = () => {
             <div style={{ marginTop: 32, display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 40, height: 1, background: '#b8975a' }} />
               <span style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.25em', textTransform: 'uppercase' }}>
-                {items.length} item{items.length !== 1 ? 's' : ''} curated for you
+                {items.length + (portal.comboItems||[]).length} item{(items.length + (portal.comboItems||[]).length) !== 1 ? 's' : ''} curated for you
               </span>
             </div>
           </div>
@@ -875,12 +889,19 @@ const ClientPortalView = () => {
       {/* ── Content ── */}
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: isMobile ? '24px 16px 80px' : '48px 48px 80px' }}>
 
-        {/* CATALOGUE */}
+        {/* CATALOGUE — products + combos as a trailing category section */}
         {tab === 'catalogue' && (
-          items.length === 0
-            ? <EmptyState icon="📋" title="Options being curated" sub="The Marqland team will update this shortly." />
-            : portal.type === 'product'
-              ? <ProductBento items={items} onZoom={setLightbox} wishlisted={wishlisted} onToggleWish={toggleWish} portal={portal} />
+          portal.type === 'product'
+            ? <ProductBento
+                items={items}
+                onZoom={setLightbox}
+                wishlisted={wishlisted}
+                onToggleWish={toggleWish}
+                portal={portal}
+                combos={portal.comboItems || []}
+              />
+            : items.length === 0
+              ? <EmptyState icon="📋" title="Options being curated" sub="The Marqland team will update this shortly." />
               : <OffsiteCards items={items} onZoom={setLightbox} portal={portal} />
         )}
 
@@ -902,17 +923,21 @@ const ClientPortalView = () => {
                 </p>
               </div>
             </div>
-            <CostCalculator portal={portal} wishlisted={wishlisted} />
+            <CostCalculator portal={portal} wishlisted={wishlisted} combos={portal.comboItems || []} />
           </div>
         )}
 
         {/* SELECTED ITEMS */}
         {tab === 'selected' && (() => {
           const allItems = portal.type === 'product' ? portal.productItems : portal.offsiteItems;
-          const sel = allItems.filter(i => wishlisted.has(String(i._id)));
-          if (!sel.length) return (
+          const allCombos = portal.comboItems || [];
+          const selProducts = allItems.filter(i => wishlisted.has(String(i._id)));
+          const selCombos = allCombos.filter(c => wishlisted.has(String(c._id)));
+          const totalSel = selProducts.length + selCombos.length;
+
+          if (!totalSel) return (
             <EmptyState icon="🤍" title="No items shortlisted yet"
-              sub="Tap ♡ on any product in Catalogue Options to add it here.">
+              sub="Tap ♡ on any product or bundle in Catalogue Options to add it here.">
               <button onClick={() => setTab('catalogue')} style={{ marginTop: 24, background: '#b8975a', color: '#0e1520', border: 'none', padding: '14px 36px', fontWeight: 500, fontSize: 10, cursor: 'pointer', fontFamily: "'Jost',sans-serif", letterSpacing: '0.25em', textTransform: 'uppercase' }}>
                 Browse Catalogue
               </button>
@@ -925,47 +950,22 @@ const ClientPortalView = () => {
                 <div style={{ width: 1, height: 28, background: '#b8975a', flexShrink: 0 }} />
                 <div>
                   <div style={{ fontSize: 18, fontWeight: 300, color: '#1a1a1a', fontFamily: "'Cormorant Garamond',Georgia,serif", fontStyle: 'italic' }}>
-                    {sel.length} item{sel.length !== 1 ? 's' : ''} shortlisted
+                    {totalSel} item{totalSel !== 1 ? 's' : ''} shortlisted
                   </div>
                   <div style={{ fontSize: 10, color: 'rgba(26,26,26,0.4)', marginTop: 3, fontFamily: "'Jost',sans-serif", letterSpacing: '0.1em', textTransform: 'uppercase' }}>Mention these in the message board to share your preferences.</div>
                 </div>
               </div>
-              {/* Selected items — 3-col bento grid with image + description + price */}
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap: 14 }}>
-                {sel.map((item, idx) => (
-                  <GlassCard key={item._id} delay={idx * 0.04} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    {/* Image */}
-                    <div style={{ position: 'relative', height: 200, flexShrink: 0, overflow: 'hidden', borderRadius: '12px 12px 0 0', cursor: item.imageUrl ? 'zoom-in' : 'default' }}
-                      onClick={() => { if (item.imageUrl) setLightbox({ src: item.imageUrl, alt: item.name }); }}>
-                      {item.imageUrl
-                        ? <img src={item.imageUrl} alt={item.name} className="img-hover" style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform .4s ease' }} />
-                        : <div style={{ width: '100%', height: '100%', background: '#f3f0ec', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>No image</div>
-                      }
-                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg,rgba(10,20,34,0.82) 0%,transparent 48%)', pointerEvents: 'none' }} />
-                      {/* Badges */}
-                      <div style={{ position: 'absolute', bottom: 10, left: 10, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                        {item.category && <span style={{ background: 'rgba(184,151,90,0.88)', color: '#0e1520', fontSize: 8, fontWeight: 800, padding: '3px 7px', borderRadius: 4, backdropFilter: 'blur(4px)', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: "'Jost',sans-serif" }}>{item.category}</span>}
-                        {item.subCategory && <span style={{ background: 'rgba(255,255,255,0.14)', color: 'rgba(255,255,255,0.85)', fontSize: 8, fontWeight: 700, padding: '3px 7px', borderRadius: 4, backdropFilter: 'blur(4px)', textTransform: 'uppercase', fontFamily: "'Jost',sans-serif" }}>{item.subCategory}</span>}
-                      </div>
-                      {/* Remove heart */}
-                      <button onClick={e => { e.stopPropagation(); toggleWish(String(item._id)); }}
-                        style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(220,53,69,0.82)', border: 'none', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', backdropFilter: 'blur(6px)' }}>
-                        {Ic.heart}
-                      </button>
-                    </div>
-                    {/* Info — same layout as catalogue bento card */}
-                    <div style={{ padding: '14px 16px 16px', background: '#ffffff', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', lineHeight: 1.2, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Jost',sans-serif" }}>{item.name}</div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: '#d4b06a', fontFamily: "'Jost',sans-serif", flexShrink: 0 }}>{toINR(portal?.calculatorState?.[item._id]?.priceOverride ?? item.price)}</div>
-                      </div>
-                      {item.description && (
-                        <p style={{ fontSize: 12, color: '#888888', lineHeight: 1.6, margin: 0, fontFamily: "'Jost',sans-serif", display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.description}</p>
-                      )}
-                    </div>
-                  </GlassCard>
-                ))}
-              </div>
+
+              <SelectedItemsGroups
+                selCombos={selCombos}
+                selProducts={selProducts}
+                wishlisted={wishlisted}
+                toggleWish={toggleWish}
+                setLightbox={setLightbox}
+                portal={portal}
+                isMobile={isMobile}
+                onZoom={setLightbox}
+              />
             </div>
           );
         })()}
@@ -1312,12 +1312,359 @@ const ClientPortalView = () => {
 
 
 
-const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = () => { }, portal = null }) => {
+// ─────────────────────────────────────────────────────────────────────────────
+// COMBO THUMB GALLERY — adapted from old ClientPortalView
+// Composite/collage image is the default main image (slide 0).
+// Each bundled product image follows as subsequent slides.
+// Clicking a product thumbnail swaps the main image AND shows that product's
+// name + description caption below the thumbnail strip.
+// Arrow buttons appear on hover only (no pill/background).
+// ─────────────────────────────────────────────────────────────────────────────
+const ComboThumbGallery = ({ combo, onZoom, maxHeight = 280, minHeight = 180 }) => {
+  const isMobile = useMobile();
+  const [idx, setIdx] = React.useState(0);
+  const [hovering, setHovering] = React.useState(false);
+
+  const itemImgs = (combo.items || []).filter(c => c && c.imageUrl);
+
+  // Build slides:
+  // Slide 0 = always the collage (server image if exists, else CSS mosaic — flagged kind:'mosaic')
+  // Slides 1…N = each individual item image
+  const slides = [
+    combo.collageImageUrl
+      ? { kind: 'composite', imageUrl: combo.collageImageUrl, name: combo.label || 'Complete Bundle' }
+      : { kind: 'mosaic', name: combo.label || 'Complete Bundle' },
+    ...itemImgs.map(c => ({ kind: 'component', imageUrl: c.imageUrl, name: c.name, description: c.description, subCategory: c.subCategory, price: c.price })),
+  ];
+
+  if (slides.length === 0 || (slides.length === 1 && slides[0].kind === 'mosaic' && itemImgs.length === 0)) {
+    return (
+      <div style={{ height: minHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f0ec', color: 'rgba(0,0,0,0.2)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', borderRadius: '12px 12px 0 0' }}>
+        No image
+      </div>
+    );
+  }
+
+  const safeIdx = Math.min(idx, slides.length - 1);
+  const active = slides[safeIdx];
+  const allImgUrls = slides.filter(s => s.imageUrl).map(s => s.imageUrl);
+
+  const prev = e => { e.stopPropagation(); setIdx(i => (i - 1 + slides.length) % slides.length); };
+  const next = e => { e.stopPropagation(); setIdx(i => (i + 1) % slides.length); };
+
+  // CSS mosaic collage — polaroid-style 4-up grid matching reference image
+  const MosaicSlide = () => {
+    const imgs4 = itemImgs.slice(0, 4);
+    const cols = imgs4.length === 1 ? 1 : imgs4.length === 2 ? 2 : imgs4.length === 3 ? 3 : 4;
+    return (
+      <div
+        onClick={() => {}}
+        onMouseEnter={() => setHovering(true)}
+        onMouseLeave={() => setHovering(false)}
+        style={{ position: 'relative', height: maxHeight, minHeight, background: '#e8e4dd', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? 8 : 16, gap: isMobile ? 6 : 10, boxSizing: 'border-box', cursor: 'default' }}>
+        {imgs4.map((item, i) => {
+          // Slight rotation like polaroid frames
+          const rot = [-2, 1.5, -1, 2][i] || 0;
+          return (
+            <div key={i} style={{
+              flex: 1,
+              height: '100%',
+              maxWidth: `${100 / cols}%`,
+              background: '#fff',
+              borderRadius: isMobile ? 6 : 10,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.10)',
+              overflow: 'hidden',
+              display: 'flex', flexDirection: 'column',
+              transform: `rotate(${rot}deg)`,
+              transition: 'transform .3s ease',
+            }}>
+              {/* Photo area */}
+              <div style={{ overflow: 'hidden', background: '#f3f0ec', minHeight: 0, flex: 1 }}>
+                <img src={item.imageUrl} alt={item.name}
+                  style={{ width: '100%', height: 'auto', display: 'block' }} />
+              </div>
+              {/* Polaroid caption strip */}
+              <div style={{ padding: '4px 6px 6px', flexShrink: 0, background: '#fff' }}>
+                <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 8, color: 'rgba(0,0,0,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.subCategory || item.name}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {/* Dark bottom gradient */}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg,rgba(10,20,34,0.55) 0%,transparent 55%)', pointerEvents: 'none', borderRadius: '12px 12px 0 0' }} />
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px 12px 0 0' }}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}>
+
+      {/* Main view — mosaic for slide 0 when no collage, otherwise image */}
+      {active.kind === 'mosaic' ? (
+        <MosaicSlide />
+      ) : (
+        <div
+          onClick={() => active.imageUrl && onZoom({ src: active.imageUrl, alt: active.name, all: allImgUrls, startIdx: safeIdx > 0 ? safeIdx - 1 : 0 })}
+          style={{ cursor: active.imageUrl ? 'zoom-in' : 'default', position: 'relative' }}
+        >
+          <img
+            src={active.imageUrl}
+            alt={active.name}
+            style={{ width: '100%', height: 'auto', display: 'block', minHeight, transition: 'opacity .2s ease' }}
+          />
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '45%', background: 'linear-gradient(0deg,rgba(10,20,34,0.85),transparent)', pointerEvents: 'none' }} />
+        </div>
+      )}
+
+      {/* Hover arrows — bigger, rounded, blur backdrop */}
+      {slides.length > 1 && (
+        <>
+          <button onClick={prev} style={{
+            position: 'absolute', left: 6, top: '50%',
+            background: 'rgba(0,0,0,0.32)', border: 'none',
+            width: 32, height: 32, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', color: '#fff', zIndex: 4,
+            opacity: hovering ? 1 : 0,
+            transform: hovering ? 'translateY(-50%) scale(1.15)' : 'translateY(-50%) scale(1)',
+            transition: 'opacity .18s, transform .18s',
+            backdropFilter: 'blur(4px)',
+          }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+          </button>
+          <button onClick={next} style={{
+            position: 'absolute', right: 6, top: '50%',
+            background: 'rgba(0,0,0,0.32)', border: 'none',
+            width: 32, height: 32, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', color: '#fff', zIndex: 4,
+            opacity: hovering ? 1 : 0,
+            transform: hovering ? 'translateY(-50%) scale(1.15)' : 'translateY(-50%) scale(1)',
+            transition: 'opacity .18s, transform .18s',
+            backdropFilter: 'blur(4px)',
+          }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+          </button>
+        </>
+      )}
+
+      {/* Thumbnail strip — always shown when ≥2 slides */}
+      {slides.length > 1 && (
+        <div style={{ display: 'flex', gap: 4, padding: '6px 10px', background: '#fff', borderTop: '1px solid rgba(0,0,0,0.07)', overflowX: 'auto', scrollbarWidth: 'none' }}>
+          {slides.map((s, i) => {
+            const isSel = i === safeIdx;
+            return (
+              <div key={s.kind === 'mosaic' ? 'mosaic' : (s.kind === 'composite' ? 'composite' : (s.name + i))}
+                onClick={e => { e.stopPropagation(); setIdx(i); }}
+                title={s.kind === 'mosaic' || s.kind === 'composite' ? 'All items' : s.name}
+                style={{ width: 38, height: 38, borderRadius: 6, overflow: 'hidden', flexShrink: 0, border: `2px solid ${isSel ? '#b8975a' : 'transparent'}`, cursor: 'pointer', transition: 'border-color .2s', background: '#f3f0ec' }}>
+                {s.kind === 'mosaic' ? (
+                  /* Tiny 2×2 mosaic thumbnail */
+                  <div style={{ width: '100%', height: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: 1 }}>
+                    {itemImgs.slice(0, 4).map((item, ti) => (
+                      <div key={ti} style={{ overflow: 'hidden', background: '#e8e4dd' }}>
+                        <img src={item.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <img src={s.imageUrl} alt={s.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Active component caption — only for individual item slides */}
+      {active.kind === 'component' && (active.name || active.description) && (
+        <div style={{ padding: '8px 12px 10px', background: '#fff', borderTop: slides.length > 1 ? 'none' : '1px solid rgba(0,0,0,0.07)' }}>
+          {active.name && (
+            <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 11, fontWeight: 700, color: '#1a1a1a', letterSpacing: '0.02em', marginBottom: active.description ? 3 : 0 }}>
+              {active.subCategory
+                ? <><span style={{ color: '#b8975a', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', marginRight: 6 }}>{active.subCategory}</span>{active.name}</>
+                : active.name
+              }
+            </div>
+          )}
+          {active.description && (
+            <p style={{ fontFamily: "'Jost',sans-serif", fontSize: 10.5, color: '#888', lineHeight: 1.55, margin: 0 }}>
+              {active.description}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMBO BENTO — used in Selected Items tab to show shortlisted bundles
+// Same GlassCard grid as product cards, ComboThumbGallery as image area
+// ─────────────────────────────────────────────────────────────────────────────
+const ComboBento = ({ combos, onZoom, wishlisted = new Set(), onToggleWish = () => {} }) => {
+  const isMobile = useMobile();
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap: isMobile ? 10 : 16 }}>
+      {combos.map((combo, idx) => {
+        const loved = wishlisted.has(String(combo._id));
+        return (
+          <GlassCard key={combo._id} delay={idx * 0.05} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ position: 'relative' }}>
+              <ComboThumbGallery combo={combo} onZoom={onZoom} maxHeight={200} minHeight={160} />
+              {/* Heart */}
+              <button
+                onClick={e => { e.stopPropagation(); onToggleWish(String(combo._id)); }}
+                title={loved ? 'Remove from shortlist' : 'Shortlist this bundle'}
+                style={{
+                  position: 'absolute', top: 10, right: 10, zIndex: 10,
+                  background: loved ? 'rgba(220,53,69,0.88)' : 'rgba(255,255,255,0.92)',
+                  border: `1px solid ${loved ? 'rgba(220,53,69,0.3)' : 'rgba(0,0,0,0.1)'}`,
+                  borderRadius: 2, width: 32, height: 32,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: loved ? '#fff' : 'rgba(26,26,26,0.5)',
+                  backdropFilter: 'blur(4px)', transition: 'all .2s',
+                }}>
+                {loved ? Ic.heart : Ic.heartO}
+              </button>
+            </div>
+            {/* Info panel */}
+            <div style={{ padding: isMobile ? '12px 14px 14px' : '16px 18px 18px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ fontSize: isMobile ? 11 : 12, fontWeight: 400, color: '#1a1a1a', lineHeight: 1.2, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Jost',sans-serif", letterSpacing: '0.04em' }}>
+                  {combo.label || `Bundle ${idx + 1}`}
+                </div>
+                <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 500, color: '#d4b06a', fontFamily: "'Jost',sans-serif", flexShrink: 0 }}>
+                  {toINR(combo.totalPrice)}
+                </div>
+              </div>
+            </div>
+          </GlassCard>
+        );
+      })}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRODUCT BENTO — existing component below
+// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// SELECTED ITEMS GROUPS — collapsible category sections in the Shortlist tab
+// Combos first, then products grouped by category, each section collapsible.
+// ─────────────────────────────────────────────────────────────────────────────
+const SelectedItemsGroups = ({ selCombos, selProducts, wishlisted, toggleWish, setLightbox, portal, isMobile }) => {
+  // Build category groups from selected products
+  const catMap = new Map();
+  selProducts.forEach(item => {
+    const c = item.category || 'Other';
+    if (!catMap.has(c)) catMap.set(c, []);
+    catMap.get(c).push(item);
+  });
+  const catGroups = Array.from(catMap.entries());
+
+  // All sections expanded by default
+  const [collapsed, setCollapsed] = React.useState({});
+  const toggle = key => setCollapsed(p => ({ ...p, [key]: !p[key] }));
+
+  const CollapseHeader = ({ label, count, id }) => (
+    <button onClick={() => toggle(id)}
+      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, marginBottom: collapsed[id] ? 0 : 18, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+      <div style={{ width: 2, height: 16, background: GOLD_GRAD, borderRadius: 2, flexShrink: 0 }} />
+      <span style={{ fontSize: 9, fontWeight: 800, color: '#b8975a', textTransform: 'uppercase', letterSpacing: '0.18em', fontFamily: "'Jost',sans-serif" }}>{label}</span>
+      <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg,rgba(184,151,90,0.2),transparent)' }} />
+      <span style={{ fontSize: 9, color: 'rgba(26,26,26,0.35)', fontFamily: "'Jost',sans-serif" }}>{count}</span>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#b8975a" strokeWidth="2.5"
+        style={{ transform: collapsed[id] ? 'rotate(-90deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}>
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </button>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+      {/* Combo section */}
+      {selCombos.length > 0 && (
+        <div>
+          <CollapseHeader label="Combo" count={selCombos.length} id="__combos__" />
+          {!collapsed['__combos__'] && (
+            <ComboBento combos={selCombos} onZoom={setLightbox} wishlisted={wishlisted} onToggleWish={toggleWish} />
+          )}
+        </div>
+      )}
+
+      {/* Product sections grouped by category */}
+      {catGroups.map(([cat, items]) => (
+        <div key={cat}>
+          <CollapseHeader label={cat} count={items.length} id={cat} />
+          {!collapsed[cat] && (
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap: 14 }}>
+              {items.map((item, idx) => (
+                <GlassCard key={item._id} delay={idx * 0.04} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  {/* Image area — use carousel if multiple images, else single */}
+                  <div style={{ position: 'relative' }}>
+                    {(item.additionalImages || []).length > 0 ? (
+                      <ProductCarousel
+                        images={item.additionalImages}
+                        primaryUrl={item.imageUrl}
+                        productName={item.name}
+                        onZoom={setLightbox}
+                      />
+                    ) : (
+                      <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px 12px 0 0', cursor: item.imageUrl ? 'zoom-in' : 'default', background: '#f7f5f1' }}
+                        onClick={() => { if (item.imageUrl) setLightbox({ src: item.imageUrl, alt: item.name }); }}>
+                        {item.imageUrl
+                          ? <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: 'auto', display: 'block', minHeight: isMobile ? 140 : 180 }} />
+                          : <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc', fontSize: 11 }}>No image</div>
+                        }
+                      </div>
+                    )}
+                    {/* Subcategory badge */}
+                    {item.subCategory && (
+                      <div style={{ position: 'absolute', bottom: (item.additionalImages || []).length > 0 ? 54 : 10, left: 10, zIndex: 5 }}>
+                        <span style={{ background: 'rgba(184,151,90,0.88)', color: '#0e1520', fontSize: 8, fontWeight: 800, padding: '3px 7px', borderRadius: 4, backdropFilter: 'blur(4px)', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: "'Jost',sans-serif" }}>{item.subCategory}</span>
+                      </div>
+                    )}
+                    {/* Remove heart */}
+                    <button onClick={e => { e.stopPropagation(); toggleWish(String(item._id)); }}
+                      style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, background: 'rgba(220,53,69,0.82)', border: 'none', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', backdropFilter: 'blur(6px)' }}>
+                      {Ic.heart}
+                    </button>
+                  </div>
+                  {/* Info */}
+                  <div style={{ padding: '14px 16px 16px', background: '#ffffff', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a', lineHeight: 1.2, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Jost',sans-serif" }}>{item.name}</div>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: '#d4b06a', fontFamily: "'Jost',sans-serif", flexShrink: 0 }}>{toINR(portal?.calculatorState?.[item._id]?.priceOverride ?? item.price)}</div>
+                    </div>
+                    {item.description && (
+                      <p style={{ fontSize: 11, color: '#888', lineHeight: 1.6, margin: 0, fontFamily: "'Jost',sans-serif", display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.description}</p>
+                    )}
+                  </div>
+                </GlassCard>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = () => { }, portal = null, combos = [] }) => {
   const [activeCategory, setActiveCategory] = React.useState(null);
   const [activeSubCat, setActiveSubCat] = React.useState(null);
   const [imgSpans, setImgSpans] = React.useState({});
   const [hoveredId, setHoveredId] = React.useState(null);
+  // All categories expanded by default
+  const [collapsedCats, setCollapsedCats] = React.useState({});
   const isMobile = useMobile();
+
+  const toggleCat = (cat) => setCollapsedCats(p => ({ ...p, [cat]: !p[cat] }));
 
   const handleImgLoad = (id, e) => {
     const { naturalWidth: w, naturalHeight: h } = e.target;
@@ -1326,11 +1673,13 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
   };
 
   const categories = [...new Set(items.map(i => i.category).filter(Boolean))];
-  const subCats = activeCategory
+  const allCategories = combos.length > 0 ? [...categories, 'Combo'] : categories;
+  const subCats = activeCategory && activeCategory !== 'Combo'
     ? [...new Set(items.filter(i => i.category === activeCategory).map(i => i.subCategory).filter(Boolean))]
     : [];
 
   const filtered = items.filter(i => {
+    if (activeCategory === 'Combo') return false; // combos shown separately in the Combo group
     const cOk = !activeCategory || i.category === activeCategory;
     const sOk = !activeSubCat || i.subCategory === activeSubCat;
     return cOk && sOk;
@@ -1339,6 +1688,9 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
   const groupMap = new Map();
   filtered.forEach(item => { const c = item.category || 'Other'; if (!groupMap.has(c)) groupMap.set(c, []); groupMap.get(c).push(item); });
   const groups = Array.from(groupMap.entries()).map(([cat, its]) => ({ cat, items: its }));
+
+  // Whether to show combos — when no filter, or when Combo is selected
+  const showCombos = combos.length > 0 && (!activeCategory || activeCategory === 'Combo');
 
   // Chip styles — secondary button style from DESIGN.md (ghost border)
   const chip = active => ({
@@ -1359,18 +1711,18 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
 
   return (
     <div>
-      {/* Filter bar — surface-container tonal panel */}
-      <div style={{ marginBottom: isMobile ? 16 : 32, padding: isMobile ? '14px 16px' : '18px 22px', background: '#ffffff', borderRadius: 12 }}>
+      {/* Filter bar — sticky below nav + tab bar when in catalogue */}
+      <div style={{ position: 'sticky', top: 116, zIndex: 30, marginBottom: isMobile ? 16 : 32, padding: isMobile ? '14px 16px' : '18px 22px', background: '#ffffff', borderRadius: 0, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
           <span style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.12em', marginRight: 6, fontFamily: "'Jost',sans-serif" }}>Category</span>
-          {categories.map(cat => (
+          {allCategories.map(cat => (
             <button key={cat} style={chip(activeCategory === cat)}
               onClick={() => { if (activeCategory === cat) { setActiveCategory(null); setActiveSubCat(null); } else { setActiveCategory(cat); setActiveSubCat(null); } }}>
               {cat}
             </button>
           ))}
         </div>
-        {activeCategory && subCats.length > 0 && (
+        {activeCategory && activeCategory !== 'Combo' && subCats.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.06)', alignItems: 'center' }}>
             <span style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.12em', marginRight: 6, fontFamily: "'Jost',sans-serif" }}>Type</span>
             {subCats.map(sc => (
@@ -1379,25 +1731,35 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
           </div>
         )}
         <div style={{ marginTop: 10, fontSize: 12, color: '#888888', fontFamily: "'Jost',sans-serif" }}>
-          <span style={{ fontWeight: 700, color: '#b8975a' }}>{filtered.length}</span>
-          {' '}option{filtered.length !== 1 ? 's' : ''} curated for you
+          <span style={{ fontWeight: 700, color: '#b8975a' }}>
+            {activeCategory === 'Combo' ? combos.length : filtered.length + (showCombos && !activeCategory ? combos.length : 0)}
+          </span>
+          {' '}option{(activeCategory === 'Combo' ? combos.length : filtered.length) !== 1 ? 's' : ''} curated for you
           {activeCategory && <span style={{ color: 'rgba(255,255,255,0.25)' }}> in <span style={{ color: '#b8975a' }}>{activeCategory}</span>{activeSubCat ? ` › ${activeSubCat}` : ''}</span>}
         </div>
       </div>
 
       {/* Category groups */}
-      {groups.map((group, gi) => (
+      {groups.map((group, gi) => {
+        const isCatCollapsed = !!collapsedCats[group.cat];
+        return (
         <div key={group.cat} style={{ marginBottom: 56 }}>
-          {/* Category header — Status Pillar style */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: isMobile ? 14 : 22 }}>
+          {/* Category header — clickable to collapse/expand */}
+          <button
+            onClick={() => toggleCat(group.cat)}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, marginBottom: isCatCollapsed ? 0 : (isMobile ? 14 : 22), background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
             <div style={{ width: 2, height: 20, background: GOLD_GRAD, borderRadius: 2, flexShrink: 0 }} />
             <span style={{ fontSize: 10, fontWeight: 800, color: '#b8975a', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'Jost',sans-serif" }}>{group.cat}</span>
-            <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, rgba(184,151,90,0.2), transparent)` }} />
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', fontWeight: 600, fontFamily: "'Jost',sans-serif" }}>{group.items.length} item{group.items.length !== 1 ? 's' : ''}</span>
-          </div>
+            <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, rgba(184,151,90,0.2), transparent)' }} />
+            <span style={{ fontSize: 10, color: 'rgba(26,26,26,0.35)', fontWeight: 600, fontFamily: "'Jost',sans-serif" }}>{group.items.length} item{group.items.length !== 1 ? 's' : ''}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b8975a" strokeWidth="2.5"
+              style={{ transform: isCatCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}>
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
 
-          {/* Sub-groups */}
-          {(() => {
+          {/* Items — hidden when collapsed */}
+          {!isCatCollapsed && (() => {
             const subMap = new Map();
             group.items.forEach(item => { const s = item.subCategory || ''; if (!subMap.has(s)) subMap.set(s, []); subMap.get(s).push(item); });
             const subGroups = Array.from(subMap.entries());
@@ -1449,14 +1811,14 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
                               />
                             ) : (
                               <div
-                                style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px 12px 0 0', cursor: item.imageUrl ? 'zoom-in' : 'default' }}
+                                style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px 12px 0 0', cursor: item.imageUrl ? 'zoom-in' : 'default', background: '#f7f5f1' }}
                                 onClick={() => { if (item.imageUrl) onZoom({ src: item.imageUrl, alt: item.name }); }}
                               >
                                 {item.imageUrl
                                   ? <img
                                     src={item.imageUrl}
                                     alt={item.name}
-                                    style={{ width: '100%', display: 'block', objectFit: 'cover', maxHeight: isMobile ? 200 : (span === 'wide' ? 320 : 280), minHeight: isMobile ? 140 : 180 }}
+                                    style={{ width: '100%', height: 'auto', display: 'block', minHeight: isMobile ? 140 : 180 }}
                                     onLoad={e => handleImgLoad(item._id, e)}
                                   />
                                   : <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f0ec', color: 'rgba(255,255,255,0.15)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>No image</div>
@@ -1470,12 +1832,12 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
                               </div>
                             )}
 
-                            {/* Heart */}
+                            {/* Heart — moved to top-right per UI spec */}
                             <button
                               onClick={e => { e.stopPropagation(); onToggleWish(String(item._id)); }}
                               title={loved ? 'Remove from shortlist' : 'Add to shortlist'}
                               style={{
-                                position: 'absolute', top: 10, left: 10, zIndex: 10,
+                                position: 'absolute', top: 10, right: 10, zIndex: 10,
                                 background: loved ? 'rgba(220,53,69,0.88)' : 'rgba(255,255,255,0.92)',
                                 border: `1px solid ${loved ? 'rgba(220,53,69,0.3)' : 'rgba(0,0,0,0.1)'}`,
                                 borderRadius: 2, width: 32, height: 32,
@@ -1577,9 +1939,92 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
             ));
           })()}
         </div>
-      ))}
+        );
+      })}
 
-      {filtered.length === 0 && <EmptyState icon="🔍" title="No items found" sub="Try selecting a different category" />}
+      {filtered.length === 0 && !showCombos && <EmptyState icon="🔍" title="No items found" sub="Try selecting a different category" />}
+
+      {/* ── COMBO — same collapsible category structure as product categories ── */}
+      {showCombos && (() => {
+        const isComboCollapsed = !!collapsedCats['__combo__'];
+        return (
+        <div style={{ marginTop: groups.length > 0 && !activeCategory ? 56 : 0, marginBottom: 56 }}>
+          {/* Collapsible header */}
+          <button
+            onClick={() => toggleCat('__combo__')}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, marginBottom: isComboCollapsed ? 0 : (isMobile ? 14 : 22), background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+            <div style={{ width: 2, height: 20, background: GOLD_GRAD, borderRadius: 2, flexShrink: 0 }} />
+            <span style={{ fontSize: 10, fontWeight: 800, color: '#b8975a', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'Jost',sans-serif" }}>Combo</span>
+            <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, rgba(184,151,90,0.2), transparent)' }} />
+            <span style={{ fontSize: 10, color: 'rgba(26,26,26,0.35)', fontWeight: 600, fontFamily: "'Jost',sans-serif" }}>{combos.length} bundle{combos.length !== 1 ? 's' : ''}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b8975a" strokeWidth="2.5"
+              style={{ transform: isComboCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}>
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+
+          {/* Bundle cards — only shown when expanded */}
+          {!isComboCollapsed && (
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(3,1fr)', gap: isMobile ? 10 : 16 }}>
+            {combos.map((combo, idx) => {
+              const loved = wishlisted.has(String(combo._id));
+              return (
+                <GlassCard key={combo._id} delay={idx * 0.05} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', gridColumn: 'span 1' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
+
+                    {/* Image area — ComboThumbGallery: mosaic → item thumbnails → caption */}
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <ComboThumbGallery
+                        combo={combo}
+                        onZoom={onZoom}
+                        maxHeight={isMobile ? 180 : 240}
+                        minHeight={isMobile ? 140 : 180}
+                      />
+
+                      {/* Heart — absolute over the gallery */}
+                      <button
+                        onClick={e => { e.stopPropagation(); onToggleWish(String(combo._id)); }}
+                        title={loved ? 'Remove from shortlist' : 'Shortlist this bundle'}
+                        style={{
+                          position: 'absolute', top: 10, right: 10, zIndex: 10,
+                          background: loved ? 'rgba(220,53,69,0.88)' : 'rgba(255,255,255,0.92)',
+                          border: `1px solid ${loved ? 'rgba(220,53,69,0.3)' : 'rgba(0,0,0,0.1)'}`,
+                          borderRadius: 2, width: 32, height: 32,
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: loved ? '#fff' : 'rgba(26,26,26,0.5)',
+                          backdropFilter: 'blur(4px)', transition: 'all .2s',
+                        }}>
+                        {loved ? Ic.heart : Ic.heartO}
+                      </button>
+                    </div>
+
+                    {/* Info panel */}
+                    <div style={{ padding: isMobile ? '12px 14px 14px' : '16px 18px 18px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+                        <div style={{ fontSize: isMobile ? 11 : 12, fontWeight: 400, color: '#1a1a1a', lineHeight: 1.2, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Jost',sans-serif", letterSpacing: '0.04em' }}>
+                          {combo.label || `Bundle ${idx + 1}`}
+                        </div>
+                        <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 500, color: '#d4b06a', fontFamily: "'Jost',sans-serif", flexShrink: 0 }}>
+                          {toINR(combo.totalPrice)}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {(combo.items || []).map((item, i) => (
+                          <span key={i} style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: 'rgba(26,26,26,0.45)', background: 'rgba(0,0,0,0.05)', padding: '2px 7px', borderRadius: 10 }}>
+                            {item.subCategory || item.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </GlassCard>
+              );
+            })}
+          </div>
+          )}
+        </div>
+        );
+      })()}
     </div>
   );
 };
@@ -1814,13 +2259,201 @@ const OffsiteCards = ({ items, onZoom, portal }) => {
 // UNIFIED COST CALCULATOR
 // One component for both portal types. Desktop/tablet only.
 // ═════════════════════════════════════════════════════════════════════════════
-const CostCalculator = ({ portal, wishlisted = new Set() }) => {
+// ─────────────────────────────────────────────────────────────────────────────
+// UNIFIED CALC TABLE — all shortlisted items (products + combos) in one table
+// Products: single image row. Combos: expandable row with thumbnail strip.
+// First row auto-expanded on mount. Qty input: plain number, no arrows, no ±.
+// ─────────────────────────────────────────────────────────────────────────────
+const UnifiedCalcTable = ({ rows, qty, setQ, portal, INR, inputSt, grandTotalQty, onReset }) => {
+  // First combo row expanded by default
+  const [expanded, setExpanded] = React.useState(() => {
+    const init = {};
+    const firstCombo = rows.find(r => r.kind === 'combo');
+    if (firstCombo) init[firstCombo.id] = true;
+    return init;
+  });
+  const toggleExpand = (id) => setExpanded(p => ({ ...p, [id]: !p[id] }));
+
+  return (
+    <div>
+      {/* Table header */}
+      <div style={{ display: 'grid', gridTemplateColumns: '24px 56px 1fr 130px 90px 110px', gap: 0, padding: '8px 16px', background: '#f7f5f1', borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
+        {[['', 'left'], ['', 'left'], ['Item', 'left'], ['Unit Price', 'center'], ['Qty', 'center'], ['Amount', 'right']].map(([h, align], i) => (
+          <span key={i} style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: '#aaa', letterSpacing: '0.2em', textTransform: 'uppercase', textAlign: align }}>{h}</span>
+        ))}
+      </div>
+
+      {rows.map((row, rowIdx) => {
+        if (row.kind === 'product') {
+          const { item } = row;
+          const q = qty[item._id] || 0;
+          const unitPrice = portal?.calculatorState?.[item._id]?.priceOverride ?? (item.price || 0);
+          const line = q * unitPrice;
+          const active = q > 0;
+          const isExp = !!expanded[row.id];
+          return (
+            <div key={row.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+              <div style={{
+                display: 'grid', gridTemplateColumns: '24px 56px 1fr 130px 90px 110px', gap: 0,
+                alignItems: 'center',
+                background: active ? 'rgba(184,151,90,0.04)' : rowIdx % 2 === 0 ? '#fff' : '#faf8f5',
+                borderLeft: active ? '3px solid #b8975a' : '3px solid transparent',
+                transition: 'background .15s, border-color .15s',
+                minHeight: 64,
+              }}>
+                {/* Expand toggle — empty for products */}
+                <div style={{ width: 24 }} />
+                {/* Image */}
+                <div style={{ width: 56, height: 64, overflow: 'hidden', background: '#f3f0ec' }}>
+                  {item.imageUrl
+                    ? <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#ddd' }}>□</div>
+                  }
+                </div>
+                {/* Name */}
+                <div style={{ padding: '0 14px' }}>
+                  <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 15, color: '#1a1a1a', lineHeight: 1.2 }}>{item.name}</div>
+                  {item.subCategory && <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 10, color: '#aaa', marginTop: 2, letterSpacing: '0.08em' }}>{item.subCategory}</div>}
+                  {item.category && <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: '#ccc', marginTop: 1, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{item.category}</div>}
+                </div>
+                {/* Price */}
+                <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 15, color: '#d4b06a', textAlign: 'center', padding: '0 8px' }}>{INR(unitPrice)}</div>
+                {/* Qty — no arrows, no ± */}
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '0 6px' }}>
+                  <input type="number" min="0" max="99999" value={q || ''} placeholder="0"
+                    onChange={e => setQ(item._id, e.target.value)}
+                    onFocus={e => e.target.style.borderColor = '#b8975a'}
+                    onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.12)'}
+                    style={{ ...inputSt, width: 64, textAlign: 'center', MozAppearance: 'textfield' }} />
+                </div>
+                {/* Line */}
+                <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 15, color: active ? '#b8975a' : '#ddd', textAlign: 'right', padding: '0 16px 0 0', fontStyle: active ? 'normal' : 'italic' }}>
+                  {active ? INR(line) : '—'}
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // COMBO ROW
+        const { combo, ci } = row;
+        const q = qty[combo._id] || 0;
+        const unitPrice = combo.totalPrice || 0;
+        const line = q * unitPrice;
+        const active = q > 0;
+        const isExp = !!expanded[row.id];
+        const leadImg = combo.collageImageUrl || (combo.items||[]).find(i => i.imageUrl)?.imageUrl || '';
+        return (
+          <div key={row.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+            {/* Main combo row — entire row is clickable to expand/collapse */}
+            <div
+              onClick={() => toggleExpand(row.id)}
+              style={{
+                display: 'grid', gridTemplateColumns: '24px 56px 1fr 130px 90px 110px', gap: 0,
+                alignItems: 'center',
+                background: isExp ? 'rgba(184,151,90,0.06)' : (active ? 'rgba(184,151,90,0.04)' : rowIdx % 2 === 0 ? '#fff' : '#faf8f5'),
+                borderLeft: active ? '3px solid #b8975a' : '3px solid transparent',
+                transition: 'background .15s, border-color .15s',
+                minHeight: 64,
+                cursor: 'pointer',
+              }}>
+              {/* Chevron indicator */}
+              <div style={{ width: 24, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b8975a' }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                  style={{ transform: isExp ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </div>
+              {/* Lead image / mosaic */}
+              <div style={{ width: 56, height: 64, overflow: 'hidden', background: '#f3f0ec', flexShrink: 0 }}>
+                {leadImg
+                  ? <img src={leadImg} alt={combo.label || 'Combo'} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  : <div style={{ width: '100%', height: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: 1 }}>
+                      {(combo.items||[]).slice(0,4).map((item, i) => (
+                        <div key={i} style={{ background: '#e8e4dd', overflow: 'hidden' }}>
+                          {item.imageUrl && <img src={item.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+                        </div>
+                      ))}
+                    </div>
+                }
+              </div>
+              {/* Name + items summary */}
+              <div style={{ padding: '0 14px' }}>
+                <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 15, color: '#1a1a1a', lineHeight: 1.2 }}>
+                  {combo.label || `Combo ${(ci !== undefined ? ci : rowIdx) + 1}`}
+                </div>
+                <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: '#b8975a', marginTop: 3, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  Combo · {(combo.items||[]).length} items
+                </div>
+                <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: '#bbb', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {(combo.items||[]).map(i => i.subCategory || i.name).join(' · ')}
+                </div>
+              </div>
+              {/* Price */}
+              <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 15, color: '#d4b06a', textAlign: 'center', padding: '0 8px' }}>{INR(unitPrice)}</div>
+              {/* Qty — stop propagation so clicking input doesn't toggle expand */}
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '0 6px' }} onClick={e => e.stopPropagation()}>
+                <input type="number" min="0" max="99999" value={q || ''} placeholder="0"
+                  onChange={e => setQ(combo._id, e.target.value)}
+                  onFocus={e => e.target.style.borderColor = '#b8975a'}
+                  onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.12)'}
+                  style={{ ...inputSt, width: 64, textAlign: 'center', MozAppearance: 'textfield' }} />
+              </div>
+              {/* Line */}
+              <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 15, color: active ? '#b8975a' : '#ddd', textAlign: 'right', padding: '0 16px 0 0', fontStyle: active ? 'normal' : 'italic' }}>
+                {active ? INR(line) : '—'}
+              </div>
+            </div>
+
+            {/* Expanded thumbnail strip */}
+            {isExp && (combo.items||[]).length > 0 && (
+              <div style={{ background: '#faf8f5', borderTop: '1px solid rgba(0,0,0,0.04)', padding: '10px 16px 12px 100px' }}>
+                <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 8, color: '#b8975a', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 8 }}>
+                  Items in this combo
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {(combo.items||[]).map((item, i) => (
+                    <div key={i} title={item.name}
+                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 68 }}>
+                      <div style={{ width: 68, height: 68, borderRadius: 6, overflow: 'hidden', background: '#e8e4dd', border: '1px solid rgba(0,0,0,0.07)', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+                        {item.imageUrl
+                          ? <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: '#ccc' }}>✦</div>
+                        }
+                      </div>
+                      <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 8, color: '#888', textAlign: 'center', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 68 }}>
+                        {item.subCategory || item.name}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Reset */}
+      {grandTotalQty > 0 && (
+        <button onClick={onReset}
+          style={{ marginTop: 12, background: 'none', border: '1px solid rgba(0,0,0,0.1)', padding: '7px 18px', cursor: 'pointer', fontFamily: "'Jost',sans-serif", fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#aaa', transition: 'color .2s, border-color .2s' }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#1a1a1a'; e.currentTarget.style.borderColor = 'rgba(0,0,0,0.3)'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = '#aaa'; e.currentTarget.style.borderColor = 'rgba(0,0,0,0.1)'; }}>
+          Reset quantities
+        </button>
+      )}
+    </div>
+  );
+};
+
+const CostCalculator = ({ portal, wishlisted = new Set(), combos = [] }) => {
   const INR = v => `₹${Number(v || 0).toLocaleString('en-IN')}`;
   const slug = portal.slug;
   const isProduct = portal.type === 'product';
   const productItems = portal.productItems || [];
   // Only shortlisted products appear in the calculator
   const shortlisted = productItems.filter(i => wishlisted.has(String(i._id)));
+  const shortlistedCombos = combos.filter(c => wishlisted.has(String(c._id)));
   const offsiteItems = portal.offsiteItems || [];
 
   // ── Shared helpers ──────────────────────────────────────────────────────────
@@ -1840,6 +2473,10 @@ const CostCalculator = ({ portal, wishlisted = new Set() }) => {
   const pLines = productItems.map(i => ({ ...i, q: qty[i._id] || 0, line: (qty[i._id] || 0) * (i.price || 0) }));
   const pTotal = pLines.reduce((s, l) => s + l.line, 0);
   const pTotalQty = pLines.reduce((s, l) => s + l.q, 0);
+  const comboTotal = shortlistedCombos.reduce((s, c) => s + (qty[c._id] || 0) * (c.totalPrice || 0), 0);
+  const comboTotalQty = shortlistedCombos.reduce((s, c) => s + (qty[c._id] || 0), 0);
+  const grandTotal = pTotal + comboTotal;
+  const grandTotalQty = pTotalQty + comboTotalQty;
   const pActive = pLines.filter(l => l.q > 0);
 
   // ── OFFSITE STATE ───────────────────────────────────────────────────────────
@@ -1981,131 +2618,79 @@ const CostCalculator = ({ portal, wishlisted = new Set() }) => {
     <div>
 
       {/* ════ PRODUCT CALCULATOR ════ */}
-      {isProduct && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 28, alignItems: 'start' }}>
-
-          {/* Left: shortlisted products only */}
-          <div>
-            {/* Empty state — no shortlisted items yet */}
-            {shortlisted.length === 0 ? (
-              <div style={{ padding: '60px 0', textAlign: 'center' }}>
-                <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 28, fontWeight: 300, color: '#1a1a1a', lineHeight: 1.3, marginBottom: 14 }}>
-                  Curate your selection to generate<br />a <em style={{ color: '#b8975a' }}>tailored cost summary.</em>
-                </div>
-                <p style={{ fontFamily: "'Jost',sans-serif", fontSize: 11, color: '#aaa', letterSpacing: '0.1em', lineHeight: 1.7, maxWidth: 340, margin: '0 auto 28px' }}>
-                  Shortlist products from the Catalogue tab using the ♡ button — they will appear here for you to add quantities.
-                </p>
-                <button onClick={() => { }} style={{ padding: '10px 24px', border: '1px solid rgba(184,151,90,0.35)', background: 'transparent', cursor: 'pointer', fontFamily: "'Jost',sans-serif", fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#b8975a' }}>
-                  ← Go to Catalogue
-                </button>
-              </div>
-            ) : (
-              <div>
-                {/* Table header */}
-                <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr 120px 80px 110px', gap: 0, padding: '8px 16px', background: '#f7f5f1', borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
-                  {[['', 'left'], ['Product', 'left'], ['Unit Price', 'center'], ['Qty', 'center'], ['Amount', 'right']].map(([h, align]) => (
-                    <span key={h} style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: '#aaa', letterSpacing: '0.2em', textTransform: 'uppercase', textAlign: align }}>{h}</span>
-                  ))}
-                </div>
-
-                {/* Product rows — shortlisted only, one row per product */}
-                {shortlisted.map((item, idx) => {
-                  const q = qty[item._id] || 0;
-                  const unitPrice = portal?.calculatorState?.[item._id]?.priceOverride ?? (item.price || 0);
-                  const line = q * unitPrice;
-                  const active = q > 0;
-                  return (
-                    <div key={item._id} style={{
-                      display: 'grid', gridTemplateColumns: '56px 1fr 120px 80px 110px', gap: 0,
-                      alignItems: 'center',
-                      background: active ? 'rgba(184,151,90,0.04)' : idx % 2 === 0 ? '#fff' : '#faf8f5',
-                      borderLeft: active ? '3px solid #b8975a' : '3px solid transparent',
-                      borderBottom: '1px solid rgba(0,0,0,0.05)',
-                      transition: 'background .15s, border-color .15s',
-                      minHeight: 64,
-                    }}>
-                      {/* Product image — fixed 56×64 */}
-                      <div style={{ width: 56, height: 64, flexShrink: 0, overflow: 'hidden', background: '#f3f0ec' }}>
-                        {item.imageUrl
-                          ? <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                          : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#ddd' }}>□</div>
-                        }
-                      </div>
-                      {/* Name + subcat */}
-                      <div style={{ padding: '0 14px' }}>
-                        <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 15, color: '#1a1a1a', lineHeight: 1.2 }}>{item.name}</div>
-                        {item.subCategory && <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 10, color: '#aaa', marginTop: 2, letterSpacing: '0.08em' }}>{item.subCategory}</div>}
-                        {item.category && <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: '#ccc', marginTop: 1, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{item.category}</div>}
-                      </div>
-                      {/* Unit price */}
-                      <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 15, color: '#d4b06a', textAlign: 'center', padding: '0 8px' }}>{INR(unitPrice)}</div>
-                      {/* Qty input */}
-                      <div style={{ display: 'flex', justifyContent: 'center', padding: '0 6px' }}>
-                        <input type="number" min="0" max="99999" value={q || ''} placeholder="0"
-                          onChange={e => setQ(item._id, e.target.value)}
-                          onFocus={e => e.target.style.borderColor = '#b8975a'}
-                          onBlur={e => e.target.style.borderColor = 'rgba(0,0,0,0.12)'}
-                          style={{ ...inputSt, width: 64, textAlign: 'center' }} />
-                      </div>
-                      {/* Line total */}
-                      <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 15, color: active ? '#b8975a' : '#ddd', textAlign: 'right', padding: '0 16px 0 0', fontStyle: active ? 'normal' : 'italic' }}>
-                        {active ? INR(line) : '—'}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Reset */}
-                {pTotalQty > 0 && (
-                  <button onClick={() => setQty({})}
-                    style={{ marginTop: 12, background: 'none', border: '1px solid rgba(0,0,0,0.1)', padding: '7px 18px', cursor: 'pointer', fontFamily: "'Jost',sans-serif", fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#aaa', transition: 'color .2s, border-color .2s' }}
-                    onMouseEnter={e => { e.currentTarget.style.color = '#1a1a1a'; e.currentTarget.style.borderColor = 'rgba(0,0,0,0.3)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.color = '#aaa'; e.currentTarget.style.borderColor = 'rgba(0,0,0,0.1)'; }}>
-                    Reset quantities
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Right: sticky summary */}
-          <div style={{ position: 'sticky', top: 88 }}>
-            <div style={{ background: '#0e1520', padding: '26px 24px', position: 'relative', overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', top: '-40%', right: '-30%', width: 200, height: 200, border: '1px solid rgba(184,151,90,0.06)', borderRadius: '50%', pointerEvents: 'none' }} />
-              <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.28em', textTransform: 'uppercase', marginBottom: 20 }}>Cost Summary</div>
-              {pActive.length === 0 ? (
-                <div style={{ padding: '20px 0', textAlign: 'center' }}>
-                  <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 20, fontWeight: 300, color: 'rgba(255,255,255,0.18)', fontStyle: 'italic' }}>Enter quantities</div>
-                  <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 10, color: 'rgba(255,255,255,0.12)', marginTop: 8, letterSpacing: '0.1em' }}>to see order value</div>
+      {isProduct && (() => {
+        const allRows = [
+          ...shortlisted.map((item, idx) => ({ kind: 'product', id: item._id, item, idx })),
+          ...shortlistedCombos.map((combo, ci) => ({ kind: 'combo', id: combo._id || `combo-${ci}`, combo, ci })),
+        ];
+        const hasAny = allRows.length > 0;
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 28, alignItems: 'start' }}>
+            <div>
+              {!hasAny ? (
+                <div style={{ padding: '60px 0', textAlign: 'center' }}>
+                  <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 28, fontWeight: 300, color: '#1a1a1a', lineHeight: 1.3, marginBottom: 14 }}>
+                    Curate your selection to generate<br />a <em style={{ color: '#b8975a' }}>tailored cost summary.</em>
+                  </div>
+                  <p style={{ fontFamily: "'Jost',sans-serif", fontSize: 11, color: '#aaa', letterSpacing: '0.1em', lineHeight: 1.7, maxWidth: 340, margin: '0 auto 28px' }}>
+                    Shortlist products from the Catalogue tab using the ♡ button — they will appear here for you to add quantities.
+                  </p>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                  {pActive.map(l => (
-                    <div key={l._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 12, color: 'rgba(255,255,255,0.65)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</div>
-                        <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 10, color: 'rgba(255,255,255,0.22)', marginTop: 2 }}>{INR(l.price)} × {l.q.toLocaleString('en-IN')}</div>
-                      </div>
-                      <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 14, color: '#d4b06a', flexShrink: 0 }}>{INR(l.line)}</div>
-                    </div>
-                  ))}
-                  <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid rgba(184,151,90,0.2)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <span style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.2em', textTransform: 'uppercase' }}>Total · {pTotalQty.toLocaleString('en-IN')} units</span>
-                      <span style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 28, fontWeight: 300, color: '#d4b06a', lineHeight: 1 }}>{INR(pTotal)}</span>
-                    </div>
-                  </div>
-                  <div style={{ marginTop: 16, padding: '10px 12px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}>
-                    <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: 'white', lineHeight: 1.7, letterSpacing: '0.04em' }}>
-                      * Indicative estimate. Final invoice includes GST, branding / customisation, and shipping.
-                    </div>
-                  </div>
-                </div>
+                <UnifiedCalcTable
+                  rows={allRows} qty={qty} setQ={setQ} portal={portal} INR={INR} inputSt={inputSt}
+                  grandTotalQty={grandTotalQty} onReset={() => setQty({})}
+                />
               )}
             </div>
+            <div style={{ position: 'sticky', top: 88 }}>
+              <div style={{ background: '#0e1520', padding: '26px 24px', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', top: '-40%', right: '-30%', width: 200, height: 200, border: '1px solid rgba(184,151,90,0.06)', borderRadius: '50%', pointerEvents: 'none' }} />
+                <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.28em', textTransform: 'uppercase', marginBottom: 20 }}>Cost Summary</div>
+                {grandTotalQty === 0 ? (
+                  <div style={{ padding: '20px 0', textAlign: 'center' }}>
+                    <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 20, fontWeight: 300, color: 'rgba(255,255,255,0.18)', fontStyle: 'italic' }}>Enter quantities</div>
+                    <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 10, color: 'rgba(255,255,255,0.12)', marginTop: 8, letterSpacing: '0.1em' }}>to see order value</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                    {pActive.map(l => (
+                      <div key={l._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 12, color: 'rgba(255,255,255,0.65)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</div>
+                          <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 10, color: 'rgba(255,255,255,0.22)', marginTop: 2 }}>{INR(l.price)} × {l.q.toLocaleString('en-IN')}</div>
+                        </div>
+                        <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 14, color: '#d4b06a', flexShrink: 0 }}>{INR(l.line)}</div>
+                      </div>
+                    ))}
+                    {shortlistedCombos.filter(c => (qty[c._id]||0) > 0).map((c, i) => (
+                      <div key={c._id||i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 12, color: 'rgba(255,255,255,0.65)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.label || `Combo ${i+1}`}</div>
+                          <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 10, color: 'rgba(255,255,255,0.22)', marginTop: 2 }}>{INR(c.totalPrice)} × {(qty[c._id]||0).toLocaleString('en-IN')}</div>
+                        </div>
+                        <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 14, color: '#d4b06a', flexShrink: 0 }}>{INR((qty[c._id]||0) * c.totalPrice)}</div>
+                      </div>
+                    ))}
+                    <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid rgba(184,151,90,0.2)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <span style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.2em', textTransform: 'uppercase' }}>Total · {grandTotalQty.toLocaleString('en-IN')} units</span>
+                        <span style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 28, fontWeight: 300, color: '#d4b06a', lineHeight: 1 }}>{INR(grandTotal)}</span>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 16, padding: '10px 12px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}>
+                      <div style={{ fontFamily: "'Jost',sans-serif", fontSize: 9, color: 'white', lineHeight: 1.7, letterSpacing: '0.04em' }}>
+                        * Indicative estimate. Final invoice includes GST, branding / customisation, and shipping.
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
 
       {/* ════ OFFSITE CALCULATOR ════ */}
       {!isProduct && (
