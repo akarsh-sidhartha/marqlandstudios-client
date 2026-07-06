@@ -280,11 +280,32 @@ const YouTubeEmbed = ({ url, title }) => {
   );
 };
 
+// ── Brand Video Embed (uploaded / non-YouTube video files) ───────────────────
+// Plays directly inline in the card via a native <video> tag — no new tab,
+// no login prompt. Used for manually uploaded brand videos, as opposed to
+// YouTubeEmbed above which handles youtube.com links.
+const BrandVideoEmbed = ({ url, title, poster }) => {
+  if (!url) return null;
+  return (
+    <div style={{ borderRadius: 10, overflow: 'hidden', background: '#000', border: `1px solid rgba(255,255,255,0.08)`, marginTop: 12 }}>
+      <video
+        controls
+        preload="metadata"
+        poster={poster || undefined}
+        style={{ width: '100%', aspectRatio: '16/9', display: 'block', background: '#000' }}
+      >
+        <source src={url} />
+        Your browser does not support inline video playback.
+      </video>
+    </div>
+  );
+};
+
 // ── Product Image Carousel ────────────────────────────────────────────────────
 // Shows additionalImages as swipeable dots-nav carousel below primary image.
 // Only rendered when there are ≥1 additional images.
 // CHANGES: arrows are hover-only (no white box background), counter badge removed.
-const ProductCarousel = ({ images, primaryUrl, productName, onZoom }) => {
+const ProductCarousel = ({ images, primaryUrl, productName, onZoom, isMobile = false }) => {
   const all = [primaryUrl, ...images].filter(Boolean);
   const [idx, setIdx] = React.useState(0);
   const [hovered, setHovered] = React.useState(false);
@@ -318,15 +339,17 @@ const ProductCarousel = ({ images, primaryUrl, productName, onZoom }) => {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Main image */}
+      {/* Main image — fixed aspect-ratio box so a big/tall source image can't
+          blow up the card (and therefore the grid) beyond the viewport.
+          Full-resolution image is still shown when zoomed via onZoom. */}
       <div
         onClick={() => onZoom({ src: all[idx], alt: productName, all, startIdx: idx })}
-        style={{ cursor: 'zoom-in', position: 'relative' }}
+        style={{ cursor: 'zoom-in', position: 'relative', width: '100%', aspectRatio: isMobile ? '1/1' : '4/3', overflow: 'hidden', background: '#f7f5f1' }}
       >
         <img
           src={all[idx]}
           alt={`${productName} — image ${idx + 1}`}
-          style={{ width: '100%', height: 'auto', display: 'block', minHeight: 180, transition: 'opacity 0.25s ease' }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'opacity 0.25s ease' }}
         />
         {/* Gradient */}
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '40%', background: 'linear-gradient(0deg,rgba(10,20,34,0.7),transparent)', pointerEvents: 'none' }} />
@@ -616,6 +639,24 @@ const ClientPortalView = () => {
         body: JSON.stringify({ ids }),
       }).catch(err => log.warn('Shortlist sync failed', err.message));
       return s;
+    });
+  };
+
+  // Optimistically merges a calculator-state patch into local `portal` state
+  // the instant it happens. Without this, CostCalculator (which unmounts when
+  // you leave the Cost Calculator tab) re-seeds its qty/fields purely from
+  // `portal.calculatorState` on remount — and that prop is only refreshed by
+  // the 12s silent poll, so a quick tab-away-and-back can show a stale value
+  // (e.g. 0) until the next poll catches up. Updating it here in-memory keeps
+  // `portal` current regardless of network/poll timing.
+  const patchCalculatorState = (patch) => {
+    setPortal(prev => {
+      if (!prev) return prev;
+      const nextCalc = { ...(prev.calculatorState || {}) };
+      Object.entries(patch).forEach(([id, fields]) => {
+        nextCalc[id] = { ...(nextCalc[id] || {}), ...fields };
+      });
+      return { ...prev, calculatorState: nextCalc };
     });
   };
 
@@ -923,7 +964,7 @@ const ClientPortalView = () => {
                 </p>
               </div>
             </div>
-            <CostCalculator portal={portal} wishlisted={wishlisted} combos={portal.comboItems || []} />
+            <CostCalculator portal={portal} wishlisted={wishlisted} combos={portal.comboItems || []} onCalcPatch={patchCalculatorState} />
           </div>
         )}
 
@@ -1409,12 +1450,12 @@ const ComboThumbGallery = ({ combo, onZoom, maxHeight = 280, minHeight = 180 }) 
       ) : (
         <div
           onClick={() => active.imageUrl && onZoom({ src: active.imageUrl, alt: active.name, all: allImgUrls, startIdx: safeIdx > 0 ? safeIdx - 1 : 0 })}
-          style={{ cursor: active.imageUrl ? 'zoom-in' : 'default', position: 'relative' }}
+          style={{ cursor: active.imageUrl ? 'zoom-in' : 'default', position: 'relative', width: '100%', aspectRatio: isMobile ? '1/1' : '4/3', overflow: 'hidden', background: '#f3f0ec' }}
         >
           <img
             src={active.imageUrl}
             alt={active.name}
-            style={{ width: '100%', height: 'auto', display: 'block', minHeight, transition: 'opacity .2s ease' }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'opacity .2s ease' }}
           />
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '45%', background: 'linear-gradient(0deg,rgba(10,20,34,0.85),transparent)', pointerEvents: 'none' }} />
         </div>
@@ -1509,7 +1550,7 @@ const ComboThumbGallery = ({ combo, onZoom, maxHeight = 280, minHeight = 180 }) 
 const ComboBento = ({ combos, onZoom, wishlisted = new Set(), onToggleWish = () => {} }) => {
   const isMobile = useMobile();
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap: isMobile ? 10 : 16 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap: isMobile ? 10 : 16, alignItems: 'start' }}>
       {combos.map((combo, idx) => {
         const loved = wishlisted.has(String(combo._id));
         return (
@@ -1602,7 +1643,7 @@ const SelectedItemsGroups = ({ selCombos, selProducts, wishlisted, toggleWish, s
         <div key={cat}>
           <CollapseHeader label={cat} count={items.length} id={cat} />
           {!collapsed[cat] && (
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap: 14, alignItems: 'start' }}>
               {items.map((item, idx) => (
                 <GlassCard key={item._id} delay={idx * 0.04} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                   {/* Image area — use carousel if multiple images, else single */}
@@ -1613,13 +1654,14 @@ const SelectedItemsGroups = ({ selCombos, selProducts, wishlisted, toggleWish, s
                         primaryUrl={item.imageUrl}
                         productName={item.name}
                         onZoom={setLightbox}
+                        isMobile={isMobile}
                       />
                     ) : (
-                      <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px 12px 0 0', cursor: item.imageUrl ? 'zoom-in' : 'default', background: '#f7f5f1' }}
+                      <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px 12px 0 0', cursor: item.imageUrl ? 'zoom-in' : 'default', background: '#f7f5f1', width: '100%', aspectRatio: isMobile ? '1/1' : '4/3' }}
                         onClick={() => { if (item.imageUrl) setLightbox({ src: item.imageUrl, alt: item.name }); }}>
                         {item.imageUrl
-                          ? <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: 'auto', display: 'block', minHeight: isMobile ? 140 : 180 }} />
-                          : <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc', fontSize: 11 }}>No image</div>
+                          ? <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc', fontSize: 11 }}>No image</div>
                         }
                       </div>
                     )}
@@ -1643,6 +1685,19 @@ const SelectedItemsGroups = ({ selCombos, selProducts, wishlisted, toggleWish, s
                     </div>
                     {item.description && (
                       <p style={{ fontSize: 11, color: '#888', lineHeight: 1.6, margin: 0, fontFamily: "'Jost',sans-serif", display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.description}</p>
+                    )}
+                    {/* ── Video embed (YouTube or direct link) — hidden entirely if no video uploaded ── */}
+                    {item.videoUrl && getYouTubeId(item.videoUrl) && (
+                      <div style={{ marginTop: 4 }}>
+                        <div style={{ fontSize: 9, fontWeight: 800, color: '#888888', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6, fontFamily: "'Jost',sans-serif" }}>🎬 Product Video</div>
+                        <YouTubeEmbed url={item.videoUrl} title={item.name} />
+                      </div>
+                    )}
+                    {item.videoUrl && !getYouTubeId(item.videoUrl) && (
+                      <div style={{ marginTop: 4 }}>
+                        <div style={{ fontSize: 9, fontWeight: 800, color: '#888888', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6, fontFamily: "'Jost',sans-serif" }}>🎬 Product Video</div>
+                        <BrandVideoEmbed url={item.videoUrl} title={item.name} poster={item.imageUrl} />
+                      </div>
                     )}
                   </div>
                 </GlassCard>
@@ -1778,6 +1833,7 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
                   display: 'grid',
                   gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(3,1fr)',
                   gap: isMobile ? 10 : 16,
+                  alignItems: 'start',
                 }}>
                   {subItems.map((item, idx) => {
                     const span = imgSpans[item._id] || 'square';
@@ -1808,20 +1864,21 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
                                 primaryUrl={item.imageUrl}
                                 productName={item.name}
                                 onZoom={onZoom}
+                                isMobile={isMobile}
                               />
                             ) : (
                               <div
-                                style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px 12px 0 0', cursor: item.imageUrl ? 'zoom-in' : 'default', background: '#f7f5f1' }}
+                                style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px 12px 0 0', cursor: item.imageUrl ? 'zoom-in' : 'default', background: '#f7f5f1', width: '100%', aspectRatio: isMobile ? '1/1' : '4/3' }}
                                 onClick={() => { if (item.imageUrl) onZoom({ src: item.imageUrl, alt: item.name }); }}
                               >
                                 {item.imageUrl
                                   ? <img
                                     src={item.imageUrl}
                                     alt={item.name}
-                                    style={{ width: '100%', height: 'auto', display: 'block', minHeight: isMobile ? 140 : 180 }}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                                     onLoad={e => handleImgLoad(item._id, e)}
                                   />
-                                  : <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f0ec', color: 'rgba(255,255,255,0.15)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>No image</div>
+                                  : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f0ec', color: 'rgba(255,255,255,0.15)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>No image</div>
                                 }
                                 {/* Zoom hint */}
                                 {item.imageUrl && (
@@ -1914,19 +1971,10 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
                               </div>
                             )}
                             {item.videoUrl && !getYouTubeId(item.videoUrl) && (
-                              <a
-                                href={item.videoUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 4,
-                                  padding: '7px 12px', borderRadius: 8, textDecoration: 'none',
-                                  background: 'rgba(184,151,90,0.07)', border: '1px solid rgba(184,151,90,0.18)',
-                                  fontSize: 11, fontWeight: 700, color: '#b8975a', fontFamily: "'Jost',sans-serif",
-                                }}
-                              >
-                                {Ic.play} Watch Brand Video
-                              </a>
+                              <div style={{ marginTop: 4 }}>
+                                <div style={{ fontSize: 9, fontWeight: 800, color: '#888888', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6, fontFamily: "'Jost',sans-serif" }}>🎬 Product Video</div>
+                                <BrandVideoEmbed url={item.videoUrl} title={item.name} poster={item.imageUrl} />
+                              </div>
                             )}
                           </div>
 
@@ -1965,7 +2013,7 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
 
           {/* Bundle cards — only shown when expanded */}
           {!isComboCollapsed && (
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(3,1fr)', gap: isMobile ? 10 : 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(3,1fr)', gap: isMobile ? 10 : 16, alignItems: 'start' }}>
             {combos.map((combo, idx) => {
               const loved = wishlisted.has(String(combo._id));
               return (
@@ -2446,7 +2494,7 @@ const UnifiedCalcTable = ({ rows, qty, setQ, portal, INR, inputSt, grandTotalQty
   );
 };
 
-const CostCalculator = ({ portal, wishlisted = new Set(), combos = [] }) => {
+const CostCalculator = ({ portal, wishlisted = new Set(), combos = [], onCalcPatch = () => {} }) => {
   const INR = v => `₹${Number(v || 0).toLocaleString('en-IN')}`;
   const slug = portal.slug;
   const isProduct = portal.type === 'product';
@@ -2463,11 +2511,47 @@ const CostCalculator = ({ portal, wishlisted = new Set(), combos = [] }) => {
     textAlign: 'center', outline: 'none', background: '#fff', transition: 'border-color .15s',
   };
 
+  // ── SHARED PERSISTENCE ───────────────────────────────────────────────────────
+  // calculatorState is keyed by item/combo _id, so product qty, combo qty, and
+  // offsite calculator fields all live side by side in the same object.
+  // fullStateRef accumulates every change locally (starting from whatever was
+  // already persisted) so that a product-qty edit and an offsite-calculator
+  // edit in the same session never overwrite each other's last save.
+  const persistedCalc = portal.calculatorState || {};
+  const fullStateRef = React.useRef({ ...persistedCalc });
+  const persistTimer = React.useRef(null);
+  // patch: { [id]: { ...fieldsToMerge } } — only the fields that changed
+  const persistCalcState = React.useCallback((patch) => {
+    // Update the parent's portal.calculatorState immediately so a remount
+    // (e.g. from switching tabs) always seeds from the latest edit, not a
+    // stale pre-poll snapshot.
+    onCalcPatch(patch);
+    Object.entries(patch).forEach(([id, fields]) => {
+      fullStateRef.current[id] = { ...(fullStateRef.current[id] || {}), ...fields };
+    });
+    clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => {
+      log.debug('Persisting calculator state', { slug });
+      fetch(`${API_BASE}/api/portal/public/${slug}/calculator`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ calculatorState: fullStateRef.current }),
+      }).catch(err => log.warn('Calculator state persist failed', err.message));
+    }, 800);
+  }, [slug, onCalcPatch]);
+
   // ── PRODUCT STATE ───────────────────────────────────────────────────────────
-  const [qty, setQty] = React.useState({});
+  // Seed quantities from whatever was last persisted, so a refresh doesn't lose them.
+  const [qty, setQty] = React.useState(() => {
+    const m = {};
+    productItems.forEach(i => { const q = persistedCalc[i._id]?.qty; if (q) m[i._id] = q; });
+    combos.forEach(c => { const q = persistedCalc[c._id]?.qty; if (q) m[c._id] = q; });
+    return m;
+  });
   const setQ = (id, val) => {
     const n = Math.max(0, Math.min(99999, Number(val) || 0));
     setQty(prev => ({ ...prev, [id]: n }));
+    persistCalcState({ [id]: { qty: n } });
   };
 
   const pLines = productItems.map(i => ({ ...i, q: qty[i._id] || 0, line: (qty[i._id] || 0) * (i.price || 0) }));
@@ -2480,8 +2564,6 @@ const CostCalculator = ({ portal, wishlisted = new Set(), combos = [] }) => {
   const pActive = pLines.filter(l => l.q > 0);
 
   // ── OFFSITE STATE ───────────────────────────────────────────────────────────
-  const persistedCalc = portal.calculatorState || {};
-
   const initProp = item => {
     const saved = persistedCalc[item._id] || {};
     // Start with base keys
@@ -2503,30 +2585,8 @@ const CostCalculator = ({ portal, wishlisted = new Set(), combos = [] }) => {
   };
 
   const [calcs, setCalcs] = React.useState(() => { const m = {}; offsiteItems.forEach(i => { m[i._id] = initProp(i); }); return m; });
-  const calcsRef = React.useRef(calcs);
   const [propOpen, setPropOpen] = React.useState(() => { const m = {}; offsiteItems.forEach((i, idx) => { m[i._id] = idx === 0; }); return m; });
   const [typeFilter, setTypeFilter] = React.useState('all');
-
-  // Debounced persist to DB — fires 800ms after last change, fire-and-forget
-  const persistTimer = React.useRef(null);
-  const persistCalcState = React.useCallback((newCalcs) => {
-    calcsRef.current = newCalcs;
-    clearTimeout(persistTimer.current);
-    persistTimer.current = setTimeout(() => {
-      // Merge local calcs into the full calculatorState, preserving team-set keys
-      // (disabledAddons, disabledRooms, cat_* counts from team editor)
-      const merged = { ...persistedCalc };
-      Object.entries(calcsRef.current).forEach(([id, c]) => {
-        merged[id] = { ...(persistedCalc[id] || {}), ...c };
-      });
-      log.debug('Persisting calculator state', { slug });
-      fetch(`${API_BASE}/api/portal/public/${slug}/calculator`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ calculatorState: merged }),
-      }).catch(err => log.warn('Calculator state persist failed', err.message));
-    }, 800);
-  }, [slug]);
 
   const hasDay = offsiteItems.some(i => i.type !== 'Night Stay');
   const hasNight = offsiteItems.some(i => i.type === 'Night Stay');
@@ -2536,17 +2596,14 @@ const CostCalculator = ({ portal, wishlisted = new Set(), combos = [] }) => {
       : offsiteItems.filter(i => i.type === 'Night Stay');
 
   const upd = (id, field, val) => {
-    setCalcs(p => {
-      const next = { ...p, [id]: { ...p[id], [field]: val } };
-      persistCalcState(next);
-      return next;
-    });
+    setCalcs(p => ({ ...p, [id]: { ...p[id], [field]: val } }));
+    persistCalcState({ [id]: { [field]: val } });
   };
   const toggleAddon = (id, key) => {
     setCalcs(p => {
-      const next = { ...p, [id]: { ...p[id], addons: { ...p[id].addons, [key]: !p[id].addons[key] } } };
-      persistCalcState(next);
-      return next;
+      const nextAddons = { ...p[id].addons, [key]: !p[id].addons[key] };
+      persistCalcState({ [id]: { addons: nextAddons } });
+      return { ...p, [id]: { ...p[id], addons: nextAddons } };
     });
   };
 

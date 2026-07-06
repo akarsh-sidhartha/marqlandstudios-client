@@ -516,7 +516,7 @@ const PartnerPage = () => {
                 <div style={{ position: 'absolute', bottom:'12%', left: '4%', width: 220, height: 220, border: '1px solid rgba(255,255,255,0.025)', borderRadius: '50%' }} />
               </div>
               <div style={{ position: 'relative', zIndex: 3, textAlign: 'center', maxWidth: 860 }}>
-                <div className="h1" style={{ marginBottom: 26 }}><span className="pill">Elite Partnership Program</span></div>
+                <div className="h1" style={{ marginBottom: 26 }}><span className="pill">Zero-Platform-Fee Partnership</span></div>
                 <h1 className="h2 sf" style={{ fontSize: 'clamp(46px,8vw,80px)', color: 'white', fontWeight: 300, lineHeight: 1.05, marginBottom: 0 }}>Grow Your Business with</h1>
                 <h1 className="h3 sf" style={{ fontSize: 'clamp(46px,8vw,90px)', color: '#b8975a', fontWeight: 300, fontStyle: 'italic', lineHeight: 1.05, marginBottom: 22 }}>Marqland Studios.</h1>
                 <p className="h4 sf" style={{ color: 'rgba(255,255,255,0.34)', fontSize: 'clamp(14px,2vw,18px)', fontStyle: 'italic', fontWeight: 300, maxWidth: 520, margin: '0 auto 44px', lineHeight: 1.75 }}>
@@ -675,7 +675,7 @@ const PartnerPage = () => {
                       }}>
                         <UploadCloud size={36} color={C.primary} style={{ marginBottom: 12 }} />
                         <p style={{ fontSize: 14, color: C.onBackground, marginBottom: 4 }}>
-                          {portfolioFile ? portfolioFile.name : 'Upload Catalog or Portfolio (PDF/ZIP)'}
+                          {portfolioFile ? portfolioFile.name : 'Upload Catalog or Presentation'}
                         </p>
                         <p style={{ fontSize: 12, color: C.onSurfaceVariant }}>Maximum file size 50MB. High resolution preferred.</p>
                         <input type="file" accept=".pdf,.zip" hidden onChange={e => {
