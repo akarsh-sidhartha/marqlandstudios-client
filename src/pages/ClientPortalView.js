@@ -1717,6 +1717,14 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
   const [hoveredId, setHoveredId] = React.useState(null);
   // All categories expanded by default
   const [collapsedCats, setCollapsedCats] = React.useState({});
+  // Global price filter + sort (top filter bar)
+  const [minPrice, setMinPrice] = React.useState('');
+  const [maxPrice, setMaxPrice] = React.useState('');
+  const [sortOrder, setSortOrder] = React.useState('none'); // 'none' | 'asc' | 'desc'
+  // Per-category price filter + sort (category header rows)
+  const [catFilters, setCatFilters] = React.useState({}); // { [cat]: { min, max, sort } }
+  const getCatFilter = React.useCallback(cat => catFilters[cat] || { min: '', max: '', sort: 'none' }, [catFilters]);
+  const setCatFilter = (cat, patch) => setCatFilters(prev => ({ ...prev, [cat]: { ...(prev[cat] || { min: '', max: '', sort: 'none' }), ...patch } }));
   const isMobile = useMobile();
 
   const toggleCat = (cat) => setCollapsedCats(p => ({ ...p, [cat]: !p[cat] }));
@@ -1733,12 +1741,20 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
     ? [...new Set(items.filter(i => i.category === activeCategory).map(i => i.subCategory).filter(Boolean))]
     : [];
 
+  // Effective price for an item — respects any calculator price override
+  const getPrice = i => Number(portal?.calculatorState?.[i._id]?.priceOverride ?? i.price ?? 0);
+
   const filtered = items.filter(i => {
     if (activeCategory === 'Combo') return false; // combos shown separately in the Combo group
     const cOk = !activeCategory || i.category === activeCategory;
     const sOk = !activeSubCat || i.subCategory === activeSubCat;
-    return cOk && sOk;
+    const price = getPrice(i);
+    const minOk = minPrice === '' || isNaN(Number(minPrice)) || price >= Number(minPrice);
+    const maxOk = maxPrice === '' || isNaN(Number(maxPrice)) || price <= Number(maxPrice);
+    return cOk && sOk && minOk && maxOk;
   });
+  if (sortOrder === 'asc') filtered.sort((a, b) => getPrice(a) - getPrice(b));
+  else if (sortOrder === 'desc') filtered.sort((a, b) => getPrice(b) - getPrice(a));
 
   const groupMap = new Map();
   filtered.forEach(item => { const c = item.category || 'Other'; if (!groupMap.has(c)) groupMap.set(c, []); groupMap.get(c).push(item); });
@@ -1763,6 +1779,15 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
     color: active ? '#b8975a' : '#888888',
     outline: `1px solid ${active ? 'rgba(184,151,90,0.4)' : 'rgba(255,255,255,0.08)'}`,
   });
+  // Plain number input, no spin arrows (global CSS strips them for input[type=number])
+  const numInput = {
+    width: 78, padding: '5px 12px', borderRadius: 20, border: '1px solid rgba(0,0,0,0.12)',
+    fontSize: 11, fontFamily: "'Jost',sans-serif", outline: 'none', color: '#1a1a1a',
+    MozAppearance: 'textfield', background: '#fff',
+  };
+  const sortBtn = active => ({
+    ...chip(active), display: 'inline-flex', alignItems: 'center', gap: 4,
+  });
 
   return (
     <div>
@@ -1785,6 +1810,23 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
             ))}
           </div>
         )}
+
+        {/* Price range + sort order */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.06)', alignItems: 'center' }}>
+          <span style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.12em', marginRight: 6, fontFamily: "'Jost',sans-serif" }}>Price</span>
+          <input type="number" inputMode="numeric" placeholder="Min" value={minPrice}
+            onChange={e => setMinPrice(e.target.value)} style={numInput} />
+          <span style={{ fontSize: 11, color: '#888888' }}>–</span>
+          <input type="number" inputMode="numeric" placeholder="Max" value={maxPrice}
+            onChange={e => setMaxPrice(e.target.value)} style={numInput} />
+          <div style={{ width: 1, height: 18, background: 'rgba(0,0,0,0.08)', margin: '0 4px' }} />
+          <button style={sortBtn(sortOrder === 'asc')} onClick={() => setSortOrder(sortOrder === 'asc' ? 'none' : 'asc')}>▲ Price</button>
+          <button style={sortBtn(sortOrder === 'desc')} onClick={() => setSortOrder(sortOrder === 'desc' ? 'none' : 'desc')}>▼ Price</button>
+          {(minPrice !== '' || maxPrice !== '' || sortOrder !== 'none') && (
+            <button style={{ ...subChip(false), color: '#b8975a' }} onClick={() => { setMinPrice(''); setMaxPrice(''); setSortOrder('none'); }}>Clear</button>
+          )}
+        </div>
+
         <div style={{ marginTop: 10, fontSize: 12, color: '#888888', fontFamily: "'Jost',sans-serif" }}>
           <span style={{ fontWeight: 700, color: '#b8975a' }}>
             {activeCategory === 'Combo' ? combos.length : filtered.length + (showCombos && !activeCategory ? combos.length : 0)}
@@ -1797,26 +1839,56 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
       {/* Category groups */}
       {groups.map((group, gi) => {
         const isCatCollapsed = !!collapsedCats[group.cat];
+        const cf = getCatFilter(group.cat);
+        // Category-level price filter + sort — layered on top of the global filter/sort above
+        let catItems = group.items.filter(i => {
+          const price = getPrice(i);
+          const minOk = cf.min === '' || isNaN(Number(cf.min)) || price >= Number(cf.min);
+          const maxOk = cf.max === '' || isNaN(Number(cf.max)) || price <= Number(cf.max);
+          return minOk && maxOk;
+        });
+        if (cf.sort === 'asc') catItems = [...catItems].sort((a, b) => getPrice(a) - getPrice(b));
+        else if (cf.sort === 'desc') catItems = [...catItems].sort((a, b) => getPrice(b) - getPrice(a));
         return (
         <div key={group.cat} style={{ marginBottom: 56 }}>
-          {/* Category header — clickable to collapse/expand */}
-          <button
-            onClick={() => toggleCat(group.cat)}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, marginBottom: isCatCollapsed ? 0 : (isMobile ? 14 : 22), background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
-            <div style={{ width: 2, height: 20, background: GOLD_GRAD, borderRadius: 2, flexShrink: 0 }} />
-            <span style={{ fontSize: 10, fontWeight: 800, color: '#b8975a', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'Jost',sans-serif" }}>{group.cat}</span>
-            <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, rgba(184,151,90,0.2), transparent)' }} />
-            <span style={{ fontSize: 10, color: 'rgba(26,26,26,0.35)', fontWeight: 600, fontFamily: "'Jost',sans-serif" }}>{group.items.length} item{group.items.length !== 1 ? 's' : ''}</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b8975a" strokeWidth="2.5"
-              style={{ transform: isCatCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}>
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
+          {/* Category header — name toggles collapse; price controls sit alongside */}
+          <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: isMobile ? 8 : 14, marginBottom: isCatCollapsed ? 0 : (isMobile ? 14 : 22) }}>
+            <button
+              onClick={() => toggleCat(group.cat)}
+              style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+              <div style={{ width: 2, height: 20, background: GOLD_GRAD, borderRadius: 2, flexShrink: 0 }} />
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#b8975a', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'Jost',sans-serif" }}>{group.cat}</span>
+            </button>
+            <div style={{ flex: 1, minWidth: isMobile ? '100%' : 24, height: 1, background: 'linear-gradient(90deg, rgba(184,151,90,0.2), transparent)', order: isMobile ? 5 : 0 }} />
+
+            {/* Per-category price range */}
+            <input type="number" inputMode="numeric" placeholder="Min" value={cf.min}
+              onClick={e => e.stopPropagation()}
+              onChange={e => setCatFilter(group.cat, { min: e.target.value })}
+              style={{ ...numInput, width: 66, padding: '4px 10px', fontSize: 10 }} />
+            <span style={{ fontSize: 10, color: '#888888' }}>–</span>
+            <input type="number" inputMode="numeric" placeholder="Max" value={cf.max}
+              onClick={e => e.stopPropagation()}
+              onChange={e => setCatFilter(group.cat, { max: e.target.value })}
+              style={{ ...numInput, width: 66, padding: '4px 10px', fontSize: 10 }} />
+            <button onClick={() => setCatFilter(group.cat, { sort: cf.sort === 'asc' ? 'none' : 'asc' })}
+              style={{ ...sortBtn(cf.sort === 'asc'), padding: '3px 10px', fontSize: 9 }}>▲</button>
+            <button onClick={() => setCatFilter(group.cat, { sort: cf.sort === 'desc' ? 'none' : 'desc' })}
+              style={{ ...sortBtn(cf.sort === 'desc'), padding: '3px 10px', fontSize: 9 }}>▼</button>
+
+            <span style={{ fontSize: 10, color: 'rgba(26,26,26,0.35)', fontWeight: 600, fontFamily: "'Jost',sans-serif", whiteSpace: 'nowrap' }}>{catItems.length} item{catItems.length !== 1 ? 's' : ''}</span>
+            <button onClick={() => toggleCat(group.cat)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b8975a" strokeWidth="2.5"
+                style={{ transform: isCatCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform .2s' }}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+          </div>
 
           {/* Items — hidden when collapsed */}
           {!isCatCollapsed && (() => {
             const subMap = new Map();
-            group.items.forEach(item => { const s = item.subCategory || ''; if (!subMap.has(s)) subMap.set(s, []); subMap.get(s).push(item); });
+            catItems.forEach(item => { const s = item.subCategory || ''; if (!subMap.has(s)) subMap.set(s, []); subMap.get(s).push(item); });
             const subGroups = Array.from(subMap.entries());
             return subGroups.map(([sub, subItems]) => (
               <div key={sub || 'main'} style={{ marginBottom: 28 }}>
