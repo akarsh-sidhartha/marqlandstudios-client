@@ -610,6 +610,7 @@ const ClientPortalView = () => {
   const [nameSet, setNameSet] = useState(false);
   const [lightbox, setLightbox] = useState(null);
   const [wishlisted, setWishlisted] = useState(new Set());
+  const [hamperOpen, setHamperOpen] = useState(false);
   const [shipments, setShipments] = useState([]);
   const [shipmentsLoaded, setShipmentsLoaded] = useState(false);
   const [shipFilter, setShipFilter] = useState('all');
@@ -833,6 +834,17 @@ const ClientPortalView = () => {
 
       {lightbox && <Lightbox src={lightbox.src} alt={lightbox.alt} all={lightbox.all} startIdx={lightbox.startIdx} onClose={() => setLightbox(null)} />}
       <Toast toasts={toasts} />
+      {portal.type === 'product' && (
+        <HamperBuilder
+          open={hamperOpen}
+          onClose={() => setHamperOpen(false)}
+          items={portal.productItems || []}
+          existingClientCombos={(portal.comboItems || []).filter(c => c.createdBy === 'client')}
+          slug={slug}
+          isMobile={isMobile}
+          onSaved={() => { load(true); showToast('Hampers saved', 'Your custom combo(s) were added to the Combo tab', '🎁'); }}
+        />
+      )}
 
       {/* ── Nav — HomePage navy bar ── */}
       <nav className="ms-grain" style={{
@@ -940,6 +952,7 @@ const ClientPortalView = () => {
                 onToggleWish={toggleWish}
                 portal={portal}
                 combos={portal.comboItems || []}
+                onBuildHamper={() => setHamperOpen(true)}
               />
             : items.length === 0
               ? <EmptyState icon="📋" title="Options being curated" sub="The Marqland team will update this shortly." />
@@ -1592,6 +1605,364 @@ const ComboBento = ({ combos, onZoom, wishlisted = new Set(), onToggleWish = () 
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// HAMPER BUILDER — client builds N custom combo hampers from the catalogue,
+// filtered by budget + category/subcategory, then saves them into the
+// portal's Combo tab (persisted via PUT /public/:slug/combo-items).
+// ─────────────────────────────────────────────────────────────────────────────
+const HamperBuilder = ({ open, onClose, items = [], existingClientCombos = [], slug, isMobile, onSaved }) => {
+  const [totalBudget, setTotalBudget] = React.useState('');
+  const [selCats, setSelCats] = React.useState([]);
+  const [selSubs, setSelSubs] = React.useState([]);
+  const [catRange, setCatRange] = React.useState({}); // { [cat]: { min, max } }
+  const [hampers, setHampers] = React.useState([]);   // finished hampers this session
+  const [currentName, setCurrentName] = React.useState('');
+  const [currentIds, setCurrentIds] = React.useState([]);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [collapsedCats, setCollapsedCats] = React.useState({}); // catalogue category sections — collapsed by default
+  const [expandedImg, setExpandedImg] = React.useState({});     // per-product image-gallery expand state
+
+  // Reset everything fresh every time the builder is opened, seeding
+  // "My Combos" from whatever the client already saved previously so they
+  // can add more without losing earlier hampers. Also auto-expands the very
+  // first product (in category order) that has more than one image.
+  React.useEffect(() => {
+    if (!open) return;
+    setTotalBudget('');
+    setSelCats([]); setSelSubs([]); setCatRange({});
+    setCurrentName(''); setCurrentIds([]); setError('');
+    setCollapsedCats({});
+    setHampers(existingClientCombos.map((c, i) => ({
+      id: String(c._id || `existing-${i}`),
+      label: c.label || `My Hamper ${i + 1}`,
+      productIds: (c.items || []).map(it => String(it.productId)),
+    })));
+
+    const byCat = new Map();
+    items.forEach(it => { const c = it.category || 'Other'; if (!byCat.has(c)) byCat.set(c, []); byCat.get(c).push(it); });
+    let defaultExpanded = {};
+    for (const [, list] of byCat) {
+      const firstMulti = list.find(it => [it.imageUrl, ...(it.additionalImages || [])].filter(Boolean).length > 1);
+      if (firstMulti) { defaultExpanded = { [String(firstMulti._id)]: true }; break; }
+    }
+    setExpandedImg(defaultExpanded);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  if (!open) return null;
+
+  const categories = [...new Set(items.map(i => i.category).filter(Boolean))];
+  const subCatsFor = cat => [...new Set(items.filter(i => i.category === cat).map(i => i.subCategory).filter(Boolean))];
+
+  // Every image for a product — cover photo + any additional angles
+  const getImages = it => [it.imageUrl, ...(it.additionalImages || [])].filter(Boolean);
+
+  const toggleCat = cat => setSelCats(p => {
+    if (p.includes(cat)) {
+      setSelSubs(sp => sp.filter(sc => !subCatsFor(cat).includes(sc)));
+      setCatRange(cr => { const n = { ...cr }; delete n[cat]; return n; });
+      return p.filter(c => c !== cat);
+    }
+    return [...p, cat];
+  });
+  const toggleSub = sc => setSelSubs(p => p.includes(sc) ? p.filter(s => s !== sc) : [...p, sc]);
+  const setRange = (cat, patch) => setCatRange(p => ({ ...p, [cat]: { ...(p[cat] || { min: '', max: '' }), ...patch } }));
+  // Category sections start COLLAPSED — only explicit `false` in state opens one
+  const isCatOpen = cat => collapsedCats[cat] === false;
+  const toggleCatalogueCat = cat => setCollapsedCats(p => ({ ...p, [cat]: isCatOpen(cat) }));
+  const toggleImgExpand = id => setExpandedImg(p => ({ ...p, [id]: !p[id] }));
+
+  const itemById = id => items.find(i => String(i._id) === String(id));
+
+  // Catalogue filtered by the budget/category/subcategory constraints above
+  const filteredCatalogue = items.filter(i => {
+    if (selCats.length && !selCats.includes(i.category)) return false;
+    if (selSubs.length && i.subCategory && !selSubs.includes(i.subCategory)) return false;
+    const price = Number(i.price || 0);
+    const range = catRange[i.category];
+    if (range) {
+      if (range.min !== '' && !isNaN(Number(range.min)) && price < Number(range.min)) return false;
+      if (range.max !== '' && !isNaN(Number(range.max)) && price > Number(range.max)) return false;
+    }
+    return true;
+  });
+
+  // Grouped category-wise so the catalogue can collapse sections instead of
+  // one long scroll — same pattern as the main catalogue.
+  const catalogueGroups = (() => {
+    const map = new Map();
+    filteredCatalogue.forEach(it => {
+      const c = it.category || 'Other';
+      if (!map.has(c)) map.set(c, []);
+      map.get(c).push(it);
+    });
+    return Array.from(map.entries()).map(([cat, list]) => ({ cat, list }));
+  })();
+
+  const currentTotal = currentIds.reduce((s, id) => s + Number(itemById(id)?.price || 0), 0);
+  const budgetNum = totalBudget === '' ? null : Number(totalBudget);
+  const overBudget = budgetNum != null && currentTotal > budgetNum;
+
+  const toggleCurrent = id => setCurrentIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+
+  const addHamperToList = () => {
+    if (!currentIds.length) return;
+    setHampers(p => [...p, {
+      id: `local-${Date.now()}`,
+      label: currentName.trim() || `My Hamper ${p.length + 1}`,
+      productIds: currentIds,
+    }]);
+    setCurrentName(''); setCurrentIds([]);
+  };
+  const removeHamper = id => setHampers(p => p.filter(h => h.id !== id));
+
+  const saveHampers = async () => {
+    if (!hampers.length) { setError('Add at least one hamper before saving.'); return; }
+    setSaving(true); setError('');
+    try {
+      const payload = hampers.map(h => ({ label: h.label, items: h.productIds.map(pid => ({ productId: pid })) }));
+      const res = await fetch(`${API_BASE}/api/portal/public/${slug}/combo-items`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comboItems: payload }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Save failed');
+      onSaved && onSaved();
+      onClose();
+    } catch (e) {
+      setError(e.message || 'Could not save your hampers. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const chip = active => ({
+    padding: '5px 14px', borderRadius: 20, border: 'none', cursor: 'pointer',
+    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+    fontFamily: "'Jost',sans-serif", transition: 'all .15s',
+    background: active ? GOLD_GRAD : 'transparent',
+    color: active ? '#0e1520' : '#888',
+    boxShadow: active ? '0 4px 14px rgba(184,151,90,0.3)' : 'none',
+    outline: active ? 'none' : '1px solid rgba(0,0,0,0.12)',
+  });
+  const num = { width: 80, padding: '6px 12px', borderRadius: 20, border: '1px solid rgba(0,0,0,0.12)', fontSize: 11, fontFamily: "'Jost',sans-serif", outline: 'none', MozAppearance: 'textfield' };
+  const primaryBtn = { background: '#b8975a', color: '#0e1520', border: 'none', padding: '12px 28px', fontWeight: 500, fontSize: 10, cursor: 'pointer', fontFamily: "'Jost',sans-serif", letterSpacing: '0.2em', textTransform: 'uppercase', borderRadius: 2 };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: '#fff', zIndex: 9000, display: 'flex', flexDirection: 'column' }}>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: isMobile ? '18px 18px 14px' : '22px 32px', borderBottom: '1px solid rgba(0,0,0,0.06)', flexShrink: 0 }}>
+        <div>
+          <span className="ms-pill" style={{ marginBottom: 8, display: 'inline-block' }}>Hamper Builder</span>
+          <h2 style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontWeight: 300, fontStyle: 'italic', fontSize: isMobile ? 20 : 26, color: '#1a1a1a', margin: 0 }}>
+            Pick your products
+          </h2>
+        </div>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: 6, flexShrink: 0 }}>{Ic.close}</button>
+      </div>
+
+      {/* Scrollable body */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: isMobile ? '16px 18px' : '20px 32px 32px' }}>
+
+        {/* ── Budget & Target Definition — now inline, right at the top ──── */}
+        <div style={{ background: '#faf8f5', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8, padding: isMobile ? 14 : 18, marginBottom: 22 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 800, color: 'rgba(26,26,26,0.4)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontFamily: "'Jost',sans-serif" }}>Total Budget</div>
+              <input type="number" inputMode="numeric" placeholder="e.g. 5000" value={totalBudget}
+                onChange={e => setTotalBudget(e.target.value)}
+                style={{ ...num, width: 140, padding: '9px 14px', fontSize: 13, background: '#fff' }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <div style={{ fontSize: 9, fontWeight: 800, color: 'rgba(26,26,26,0.4)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontFamily: "'Jost',sans-serif" }}>Categories <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#aaa' }}>(leave blank for all)</span></div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {categories.map(cat => (
+                  <button key={cat} style={chip(selCats.includes(cat))} onClick={() => toggleCat(cat)}>{cat}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {selCats.map(cat => {
+            const subs = subCatsFor(cat);
+            const range = catRange[cat] || { min: '', max: '' };
+            return (
+              <div key={cat} style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: '#b8975a', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10, fontFamily: "'Jost',sans-serif" }}>{cat}</div>
+                {subs.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                    {subs.map(sc => (
+                      <button key={sc} style={{ ...chip(selSubs.includes(sc)), padding: '4px 12px', fontSize: 9 }} onClick={() => toggleSub(sc)}>{sc}</button>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 10, color: '#888' }}>Per-item limit for {cat}:</span>
+                  <input type="number" inputMode="numeric" placeholder="Min" value={range.min}
+                    onChange={e => setRange(cat, { min: e.target.value })} style={{ ...num, background: '#fff' }} />
+                  <span style={{ fontSize: 11, color: '#888' }}>–</span>
+                  <input type="number" inputMode="numeric" placeholder="Max" value={range.max}
+                    onChange={e => setRange(cat, { max: e.target.value })} style={{ ...num, background: '#fff' }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── Filtered catalogue + combo assembly ─────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 24 }}>
+
+          {/* Filtered catalogue — grouped category-wise, collapsed by default */}
+          <div style={{ flex: 1.3, minWidth: 0 }}>
+            <div style={{ fontSize: 10, color: 'rgba(26,26,26,0.4)', marginBottom: 12, fontFamily: "'Jost',sans-serif" }}>
+              <span style={{ fontWeight: 700, color: '#b8975a' }}>{filteredCatalogue.length}</span> product{filteredCatalogue.length !== 1 ? 's' : ''} match your filters — expand a category, then tap a product to add it to the hamper you're building
+            </div>
+            <div>
+              {catalogueGroups.length === 0 && (
+                <div style={{ padding: '32px 0', textAlign: 'center', color: '#aaa', fontSize: 12 }}>No products match this budget/category combination. Adjust your filters above.</div>
+              )}
+              {catalogueGroups.map(group => {
+                const open_ = isCatOpen(group.cat);
+                return (
+                  <div key={group.cat} style={{ marginBottom: 12, border: '1px solid rgba(0,0,0,0.07)', borderRadius: 8, overflow: 'hidden' }}>
+                    <button onClick={() => toggleCatalogueCat(group.cat)}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, background: '#faf8f5', border: 'none', cursor: 'pointer', padding: '10px 14px', textAlign: 'left' }}>
+                      <div style={{ width: 2, height: 16, background: GOLD_GRAD, borderRadius: 2, flexShrink: 0 }} />
+                      <span style={{ fontSize: 10, fontWeight: 800, color: '#b8975a', textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Jost',sans-serif" }}>{group.cat}</span>
+                      <div style={{ flex: 1 }} />
+                      <span style={{ fontSize: 10, color: 'rgba(26,26,26,0.35)', fontWeight: 600, fontFamily: "'Jost',sans-serif" }}>{group.list.length} item{group.list.length !== 1 ? 's' : ''}</span>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#b8975a" strokeWidth="2.5"
+                        style={{ transform: open_ ? 'none' : 'rotate(-90deg)', transition: 'transform .2s', flexShrink: 0 }}>
+                        <polyline points="6 9 12 15 18 9"/>
+                      </svg>
+                    </button>
+
+                    {open_ && (
+                      <div style={{ padding: '10px 12px 12px' }}>
+                        {group.list.map(item => {
+                          const idStr = String(item._id);
+                          const selected = currentIds.includes(idStr);
+                          const imgs = getImages(item);
+                          const hasGallery = imgs.length > 1;
+                          const galleryOpen = !!expandedImg[idStr];
+                          return (
+                            <div key={item._id} style={{ marginTop: 8 }}>
+                              <div onClick={() => toggleCurrent(idStr)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', border: `1px solid ${selected ? 'rgba(184,151,90,0.5)' : 'rgba(0,0,0,0.08)'}`, borderRadius: 8, cursor: 'pointer', background: selected ? 'rgba(184,151,90,0.07)' : '#fff', transition: 'all .12s' }}>
+                                <div style={{ width: 42, height: 42, borderRadius: 6, overflow: 'hidden', flexShrink: 0, background: '#f7f5f1' }}>
+                                  {item.imageUrl && <img src={item.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 500, color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Jost',sans-serif" }}>{item.name}</div>
+                                  <div style={{ fontSize: 10, color: '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.category}{item.subCategory ? ` › ${item.subCategory}` : ''}</div>
+                                </div>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: '#b8975a', flexShrink: 0 }}>{toINR(item.price)}</div>
+                                {hasGallery && (
+                                  <button onClick={e => { e.stopPropagation(); toggleImgExpand(idStr); }}
+                                    title={galleryOpen ? 'Hide photos' : `Show all ${imgs.length} photos`}
+                                    style={{ background: 'none', border: '1px solid rgba(0,0,0,0.14)', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#888', flexShrink: 0, padding: 0 }}>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                                      style={{ transform: galleryOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
+                                      <polyline points="6 9 12 15 18 9"/>
+                                    </svg>
+                                  </button>
+                                )}
+                                <div style={{ width: 19, height: 19, borderRadius: '50%', border: `1.5px solid ${selected ? '#b8975a' : 'rgba(0,0,0,0.2)'}`, background: selected ? '#b8975a' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#0e1520', fontSize: 11, fontWeight: 700 }}>
+                                  {selected ? '✓' : ''}
+                                </div>
+                              </div>
+
+                              {hasGallery && galleryOpen && (
+                                <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 12px 4px 66px' }}>
+                                  {imgs.map((src, i) => (
+                                    <div key={i} style={{ width: 48, height: 48, borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0 }}>
+                                      <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Current hamper + saved hampers */}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            <div style={{ background: '#faf8f5', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8, padding: 16, position: isMobile ? 'static' : 'sticky', top: 0 }}>
+              <input type="text" placeholder="Name this hamper (optional)" value={currentName}
+                onChange={e => setCurrentName(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.1)', fontSize: 12, fontFamily: "'Jost',sans-serif", outline: 'none', marginBottom: 12, background: '#fff' }} />
+
+              {currentIds.length === 0
+                ? <div style={{ fontSize: 11, color: '#aaa', padding: '8px 0' }}>Expand a category on the left and tap products to add them here.</div>
+                : (
+                  <div style={{ marginBottom: 12 }}>
+                    {currentIds.map(id => {
+                      const it = itemById(id);
+                      if (!it) return null;
+                      return (
+                        <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '5px 0', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                          <span style={{ fontSize: 11, color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{it.name}</span>
+                          <span style={{ fontSize: 11, color: '#b8975a', fontWeight: 600, flexShrink: 0 }}>{toINR(it.price)}</span>
+                          <button onClick={() => toggleCurrent(id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c0392b', fontSize: 13, padding: '0 2px', flexShrink: 0 }}>×</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+                <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Subtotal</span>
+                <span style={{ fontSize: 15, fontWeight: 600, color: overBudget ? '#c0392b' : '#1a1a1a', fontFamily: "'Jost',sans-serif" }}>{toINR(currentTotal)}</span>
+              </div>
+              {budgetNum != null && (
+                <div style={{ fontSize: 10, color: overBudget ? '#c0392b' : '#888', marginTop: 4 }}>
+                  {overBudget ? `₹${(currentTotal - budgetNum).toLocaleString('en-IN')} over your ${toINR(budgetNum)} budget` : `${toINR(budgetNum - currentTotal)} remaining of ${toINR(budgetNum)}`}
+                </div>
+              )}
+
+              <button onClick={addHamperToList} disabled={!currentIds.length}
+                style={{ ...primaryBtn, width: '100%', marginTop: 14, opacity: currentIds.length ? 1 : 0.4, cursor: currentIds.length ? 'pointer' : 'not-allowed' }}>
+                + Add to My Combos
+              </button>
+            </div>
+
+            {hampers.length > 0 && (
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 800, color: 'rgba(26,26,26,0.4)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 10, fontFamily: "'Jost',sans-serif" }}>My Combos ({hampers.length})</div>
+                {hampers.map(h => (
+                  <div key={h.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '9px 12px', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 6, marginBottom: 8 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.label}</div>
+                      <div style={{ fontSize: 10, color: '#999' }}>{h.productIds.length} item{h.productIds.length !== 1 ? 's' : ''} · {toINR(h.productIds.reduce((s, id) => s + Number(itemById(id)?.price || 0), 0))}</div>
+                    </div>
+                    <button onClick={() => removeHamper(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c0392b', fontSize: 15, flexShrink: 0 }}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {error && <div style={{ fontSize: 11, color: '#c0392b' }}>{error}</div>}
+
+            <button style={{ ...primaryBtn, opacity: saving ? 0.6 : 1, cursor: saving ? 'wait' : 'pointer' }} disabled={saving} onClick={saveHampers}>
+              {saving ? 'Saving…' : `Save ${hampers.length || ''} to Combo Tab`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PRODUCT BENTO — existing component below
 // ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1710,7 +2081,7 @@ const SelectedItemsGroups = ({ selCombos, selProducts, wishlisted, toggleWish, s
   );
 };
 
-const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = () => { }, portal = null, combos = [] }) => {
+const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = () => { }, portal = null, combos = [], onBuildHamper = null }) => {
   const [activeCategory, setActiveCategory] = React.useState(null);
   const [activeSubCat, setActiveSubCat] = React.useState(null);
   const [imgSpans, setImgSpans] = React.useState({});
@@ -1801,6 +2172,28 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
               {cat}
             </button>
           ))}
+
+          {/* Price range + sort order */}
+          <div style={{ width: 1, height: 18, background: 'rgba(0,0,0,0.08)', margin: '0 4px' }} />
+          <span style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.12em', marginRight: 2, fontFamily: "'Jost',sans-serif" }}>Price</span>
+          <input type="number" inputMode="numeric" placeholder="Min" value={minPrice}
+            onChange={e => setMinPrice(e.target.value)} style={numInput} />
+          <span style={{ fontSize: 11, color: '#888888' }}>–</span>
+          <input type="number" inputMode="numeric" placeholder="Max" value={maxPrice}
+            onChange={e => setMaxPrice(e.target.value)} style={numInput} />
+          <button style={sortBtn(sortOrder === 'asc')} onClick={() => setSortOrder(sortOrder === 'asc' ? 'none' : 'asc')}>▲ Price</button>
+          <button style={sortBtn(sortOrder === 'desc')} onClick={() => setSortOrder(sortOrder === 'desc' ? 'none' : 'desc')}>▼ Price</button>
+          {(minPrice !== '' || maxPrice !== '' || sortOrder !== 'none') && (
+            <button style={{ ...subChip(false), color: '#b8975a' }} onClick={() => { setMinPrice(''); setMaxPrice(''); setSortOrder('none'); }}>Clear</button>
+          )}
+
+          {/* Build a Hamper trigger */}
+          {onBuildHamper && (
+            <button onClick={onBuildHamper}
+              style={{ marginLeft: 'auto', background: '#b8975a', color: '#0e1520', border: 'none', padding: '9px 20px', fontWeight: 500, fontSize: 10, cursor: 'pointer', fontFamily: "'Jost',sans-serif", letterSpacing: '0.15em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+              🎁 Build a Hamper
+            </button>
+          )}
         </div>
         {activeCategory && activeCategory !== 'Combo' && subCats.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.06)', alignItems: 'center' }}>
@@ -1810,22 +2203,6 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
             ))}
           </div>
         )}
-
-        {/* Price range + sort order */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.06)', alignItems: 'center' }}>
-          <span style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.12em', marginRight: 6, fontFamily: "'Jost',sans-serif" }}>Price</span>
-          <input type="number" inputMode="numeric" placeholder="Min" value={minPrice}
-            onChange={e => setMinPrice(e.target.value)} style={numInput} />
-          <span style={{ fontSize: 11, color: '#888888' }}>–</span>
-          <input type="number" inputMode="numeric" placeholder="Max" value={maxPrice}
-            onChange={e => setMaxPrice(e.target.value)} style={numInput} />
-          <div style={{ width: 1, height: 18, background: 'rgba(0,0,0,0.08)', margin: '0 4px' }} />
-          <button style={sortBtn(sortOrder === 'asc')} onClick={() => setSortOrder(sortOrder === 'asc' ? 'none' : 'asc')}>▲ Price</button>
-          <button style={sortBtn(sortOrder === 'desc')} onClick={() => setSortOrder(sortOrder === 'desc' ? 'none' : 'desc')}>▼ Price</button>
-          {(minPrice !== '' || maxPrice !== '' || sortOrder !== 'none') && (
-            <button style={{ ...subChip(false), color: '#b8975a' }} onClick={() => { setMinPrice(''); setMaxPrice(''); setSortOrder('none'); }}>Clear</button>
-          )}
-        </div>
 
         <div style={{ marginTop: 10, fontSize: 12, color: '#888888', fontFamily: "'Jost',sans-serif" }}>
           <span style={{ fontWeight: 700, color: '#b8975a' }}>
