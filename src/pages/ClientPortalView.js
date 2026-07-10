@@ -48,6 +48,35 @@ const GLASS_BG = '#ffffff';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const toINR = v => `₹${Number(v || 0).toLocaleString('en-IN')}`;
 const fmtSz = b => b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`;
+
+// ── Input sanitization (XSS hardening) ────────────────────────────────────────
+// React already escapes everything it renders to the DOM here (this file never
+// uses dangerouslySetInnerHTML), so none of the free-text fields below — chat
+// name, chat message, hamper label — can execute a script simply by being
+// displayed back in THIS app. This exists as defense-in-depth for every other
+// place the same text can end up: the team's admin dashboard, exported PDFs,
+// email notifications, or any future consumer of this data that might not
+// escape it as carefully as React does. We strip active-content patterns at
+// the point of entry so a malicious payload never leaves the client typing it.
+//
+// Deliberately conservative — it removes tag-like constructs (`<script>`,
+// `<img onerror=...>`, `<b>`) and inline event-handler attributes, but leaves
+// ordinary punctuation alone (e.g. "<3", "cost < budget" survive untouched
+// because a bare `<` not followed by a letter never matches a tag).
+const SCRIPT_TAG_RE = /<script\b[^>]*>[\s\S]*?<\/script\s*>/gi;
+const HTML_TAG_RE = /<\/?[a-zA-Z][^>]*>/g;
+const EVENT_HANDLER_RE = /\bon[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
+const JS_URL_RE = /javascript\s*:/gi;
+
+const sanitizeText = (raw, maxLen = 500) => {
+  if (typeof raw !== 'string') return '';
+  return raw
+    .replace(SCRIPT_TAG_RE, '')
+    .replace(HTML_TAG_RE, '')
+    .replace(EVENT_HANDLER_RE, '')
+    .replace(JS_URL_RE, '')
+    .slice(0, maxLen);
+};
 const fmtT = d => new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
 
 // ── Inline feather-weight icons ───────────────────────────────────────────────
@@ -611,6 +640,7 @@ const ClientPortalView = () => {
   const [lightbox, setLightbox] = useState(null);
   const [wishlisted, setWishlisted] = useState(new Set());
   const [hamperOpen, setHamperOpen] = useState(false);
+  const [hamperInitialRange, setHamperInitialRange] = useState({});
   const [shipments, setShipments] = useState([]);
   const [shipmentsLoaded, setShipmentsLoaded] = useState(false);
   const [shipFilter, setShipFilter] = useState('all');
@@ -630,7 +660,8 @@ const ClientPortalView = () => {
   const toggleWish = id => {
     setWishlisted(prev => {
       const s = new Set(prev);
-      s.has(id) ? s.delete(id) : s.add(id);
+      const wasWished = s.has(id);
+      wasWished ? s.delete(id) : s.add(id);
       // Persist to DB so shortlist survives page refresh
       const ids = Array.from(s);
       log.debug('Updating shortlist', { itemId: id, total: ids.length });
@@ -639,6 +670,19 @@ const ClientPortalView = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids }),
       }).catch(err => log.warn('Shortlist sync failed', err.message));
+
+      // Removing an item from the shortlist also zeroes out its Cost
+      // Calculator quantity — a de-shortlisted item shouldn't silently keep
+      // contributing to the total.
+      if (wasWished) {
+        patchCalculatorState({ [id]: { qty: 0 } });
+        const nextCalc = { ...(portal?.calculatorState || {}), [id]: { ...(portal?.calculatorState?.[id] || {}), qty: 0 } };
+        fetch(`${API_BASE}/api/portal/public/${slug}/calculator`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ calculatorState: nextCalc }),
+        }).catch(err => log.warn('Calculator qty reset failed', err.message));
+      }
       return s;
     });
   };
@@ -724,12 +768,13 @@ const ClientPortalView = () => {
     // Ask for permission on first send — highest grant rate on user gesture
     const perm = await requestNotifPermission();
     if (perm === 'granted') subscribeToPortalPush(fetch); // register for server-side push
-    const sender = clientName?.trim() || portal?.orderPlacedBy || portal?.clientName || 'Client';
-    log.info('Sending message', { sender, hasText: !!msg.trim(), fileCount: files.length });
+    const sender = sanitizeText(clientName?.trim() || portal?.orderPlacedBy || portal?.clientName || 'Client', 60);
+    const cleanMsg = sanitizeText(msg.trim(), 2000);
+    log.info('Sending message', { sender, hasText: !!cleanMsg, fileCount: files.length });
     setSending(true);
     try {
       const fd = new FormData();
-      fd.append('text', msg.trim()); fd.append('senderName', sender);
+      fd.append('text', cleanMsg); fd.append('senderName', sender);
       files.forEach(f => fd.append('files', f));
       const r = await fetch(`${API_BASE}/api/portal/public/${slug}/message`, { method: 'POST', body: fd });
       if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.message || 'Send failed'); }
@@ -840,9 +885,10 @@ const ClientPortalView = () => {
           onClose={() => setHamperOpen(false)}
           items={portal.productItems || []}
           existingClientCombos={(portal.comboItems || []).filter(c => c.createdBy === 'client')}
+          initialCatRange={hamperInitialRange}
           slug={slug}
           isMobile={isMobile}
-          onSaved={() => { load(true); showToast('Hampers saved', 'Your custom combo(s) were added to the Combo tab', '🎁'); }}
+          onSaved={(msg) => { load(true); showToast(msg?.title || 'Hampers saved', msg?.body || 'Your custom combo(s) were added to the Combo tab', msg?.icon || '🎁'); }}
         />
       )}
 
@@ -952,7 +998,7 @@ const ClientPortalView = () => {
                 onToggleWish={toggleWish}
                 portal={portal}
                 combos={portal.comboItems || []}
-                onBuildHamper={() => setHamperOpen(true)}
+                onBuildHamper={(catFiltersSnapshot) => { setHamperInitialRange(catFiltersSnapshot || {}); setHamperOpen(true); }}
               />
             : items.length === 0
               ? <EmptyState icon="📋" title="Options being curated" sub="The Marqland team will update this shortly." />
@@ -1248,9 +1294,10 @@ const ClientPortalView = () => {
               {!nameSet && (
                 <div style={{ padding: '10px 18px', background: '#f3f0ec', borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input value={clientName} onChange={e => setClientName(e.target.value)}
+                    <input value={clientName} onChange={e => setClientName(sanitizeText(e.target.value, 60))}
                       onKeyDown={e => { if (e.key === 'Enter' && clientName.trim()) setNameSet(true); }}
                       placeholder="Your name so we know who's messaging"
+                      maxLength={60}
                       style={{ flex: 1, background: '#ffffff', border: '1px solid rgba(184,151,90,0.2)', borderRadius: 8, padding: '8px 13px', color: '#1a1a1a', fontSize: 13, outline: 'none', fontFamily: "'Jost',sans-serif" }} />
                     <button onClick={() => { if (clientName.trim()) setNameSet(true); }} disabled={!clientName.trim()}
                       style={{ background: GOLD_GRAD, border: 'none', borderRadius: 8, padding: '8px 16px', color: '#0e1520', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: clientName.trim() ? 1 : 0.4, fontFamily: "'Jost',sans-serif" }}>
@@ -1300,10 +1347,11 @@ const ClientPortalView = () => {
               <div style={{ padding: '14px 18px', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
                   <div style={{ flex: 1, background: '#ffffff', borderRadius: 12, padding: '10px 14px', border: `1px solid rgba(184,151,90,0.15)` }}>
-                    <textarea value={msg} onChange={e => setMsg(e.target.value)}
+                    <textarea value={msg} onChange={e => setMsg(sanitizeText(e.target.value, 2000))}
                       onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
                       placeholder="Message the team… (Enter to send)"
                       rows={2}
+                      maxLength={2000}
                       style={{ background: 'none', border: 'none', outline: 'none', color: '#1a1a1a', fontSize: 14, fontFamily: "'Jost',sans-serif", lineHeight: 1.55, width: '100%' }} />
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
                       <button type="button" onClick={() => fileRef.current?.click()}
@@ -1609,34 +1657,52 @@ const ComboBento = ({ combos, onZoom, wishlisted = new Set(), onToggleWish = () 
 // filtered by budget + category/subcategory, then saves them into the
 // portal's Combo tab (persisted via PUT /public/:slug/combo-items).
 // ─────────────────────────────────────────────────────────────────────────────
-const HamperBuilder = ({ open, onClose, items = [], existingClientCombos = [], slug, isMobile, onSaved }) => {
+const HamperBuilder = ({ open, onClose, items = [], existingClientCombos = [], initialCatRange = {}, slug, isMobile, onSaved }) => {
   const [totalBudget, setTotalBudget] = React.useState('');
   const [selCats, setSelCats] = React.useState([]);
   const [selSubs, setSelSubs] = React.useState([]);
   const [catRange, setCatRange] = React.useState({}); // { [cat]: { min, max } }
-  const [hampers, setHampers] = React.useState([]);   // finished hampers this session
+  const [hampers, setHampers] = React.useState([]);   // finished hampers this session — { id, label, productIds, isSaved }
   const [currentName, setCurrentName] = React.useState('');
   const [currentIds, setCurrentIds] = React.useState([]);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
   const [collapsedCats, setCollapsedCats] = React.useState({}); // catalogue category sections — collapsed by default
   const [expandedImg, setExpandedImg] = React.useState({});     // per-product image-gallery expand state
+  const [expandedHampers, setExpandedHampers] = React.useState({}); // per-hamper image-row expand state
+  const [hoverPreview, setHoverPreview] = React.useState(null); // { src, x, y } — bigger image shown on thumbnail hover
 
   // Reset everything fresh every time the builder is opened, seeding
   // "My Combos" from whatever the client already saved previously so they
   // can add more without losing earlier hampers. Also auto-expands the very
-  // first product (in category order) that has more than one image.
+  // first product (in category order) that has more than one image, the
+  // first hamper row, and carries over any per-category min/max the client
+  // had already set in the main catalogue filters.
   React.useEffect(() => {
     if (!open) return;
     setTotalBudget('');
-    setSelCats([]); setSelSubs([]); setCatRange({});
     setCurrentName(''); setCurrentIds([]); setError('');
     setCollapsedCats({});
-    setHampers(existingClientCombos.map((c, i) => ({
+
+    // Carry over per-category min/max from the main catalogue's filter bar
+    const seededRange = {};
+    Object.entries(initialCatRange || {}).forEach(([cat, r]) => {
+      if (r && ((r.min !== '' && r.min != null) || (r.max !== '' && r.max != null))) {
+        seededRange[cat] = { min: r.min ?? '', max: r.max ?? '' };
+      }
+    });
+    setCatRange(seededRange);
+    setSelCats(Object.keys(seededRange));
+    setSelSubs([]);
+
+    const seededHampers = existingClientCombos.map((c, i) => ({
       id: String(c._id || `existing-${i}`),
       label: c.label || `My Hamper ${i + 1}`,
       productIds: (c.items || []).map(it => String(it.productId)),
-    })));
+      isSaved: true,
+    }));
+    setHampers(seededHampers);
+    setExpandedHampers(seededHampers.length ? { [seededHampers[0].id]: true } : {});
 
     const byCat = new Map();
     items.forEach(it => { const c = it.category || 'Other'; if (!byCat.has(c)) byCat.set(c, []); byCat.get(c).push(it); });
@@ -1671,6 +1737,12 @@ const HamperBuilder = ({ open, onClose, items = [], existingClientCombos = [], s
   const isCatOpen = cat => collapsedCats[cat] === false;
   const toggleCatalogueCat = cat => setCollapsedCats(p => ({ ...p, [cat]: isCatOpen(cat) }));
   const toggleImgExpand = id => setExpandedImg(p => ({ ...p, [id]: !p[id] }));
+  const toggleHamperExpand = id => setExpandedHampers(p => ({ ...p, [id]: !p[id] }));
+
+  // Hover-to-zoom: show a bigger version of a thumbnail near the cursor
+  const showHoverPreview = (src, e) => setHoverPreview({ src, x: e.clientX, y: e.clientY });
+  const moveHoverPreview = e => setHoverPreview(p => p ? { ...p, x: e.clientX, y: e.clientY } : p);
+  const hideHoverPreview = () => setHoverPreview(null);
 
   const itemById = id => items.find(i => String(i._id) === String(id));
 
@@ -1707,17 +1779,49 @@ const HamperBuilder = ({ open, onClose, items = [], existingClientCombos = [], s
 
   const addHamperToList = () => {
     if (!currentIds.length) return;
-    setHampers(p => [...p, {
+    const newHamper = {
       id: `local-${Date.now()}`,
-      label: currentName.trim() || `My Hamper ${p.length + 1}`,
+      label: sanitizeText(currentName.trim(), 80) || `My Hamper ${hampers.length + 1}`,
       productIds: currentIds,
-    }]);
+      isSaved: false,
+    };
+    if (hampers.length === 0) setExpandedHampers({ [newHamper.id]: true });
+    setHampers(p => [...p, newHamper]);
     setCurrentName(''); setCurrentIds([]);
   };
-  const removeHamper = id => setHampers(p => p.filter(h => h.id !== id));
+
+  // Removing a hamper that was already saved to the portal deletes it from
+  // the Combo tab immediately (not just locally) — only the client's own
+  // OTHER already-saved combos are resubmitted, so any not-yet-saved hampers
+  // in progress are never accidentally persisted by this action.
+  const removeHamper = async (id) => {
+    const target = hampers.find(h => h.id === id);
+    if (!target) return;
+    setHampers(prev => prev.filter(h => h.id !== id));
+    setExpandedHampers(prev => { const n = { ...prev }; delete n[id]; return n; });
+
+    if (!target.isSaved) return;
+
+    try {
+      const remainingSaved = hampers.filter(h => h.isSaved && h.id !== id);
+      const payload = remainingSaved.map(h => ({ label: h.label, items: h.productIds.map(pid => ({ productId: pid })) }));
+      const res = await fetch(`${API_BASE}/api/portal/public/${slug}/combo-items`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comboItems: payload }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Delete failed');
+      onSaved && onSaved({ title: 'Combo removed', body: `"${target.label}" was removed from your Combo tab.`, icon: '🗑️' });
+    } catch (e) {
+      // Roll back — put it back in the list so nothing silently vanishes on a network error
+      setHampers(prev => [...prev, target]);
+      setError(e.message || 'Could not delete that combo. Please try again.');
+    }
+  };
 
   const saveHampers = async () => {
-    if (!hampers.length) { setError('Add at least one hamper before saving.'); return; }
+    const unsaved = hampers.filter(h => !h.isSaved);
+    if (!unsaved.length) { setError('Nothing new to save — every combo here is already in your Combo tab.'); return; }
     setSaving(true); setError('');
     try {
       const payload = hampers.map(h => ({ label: h.label, items: h.productIds.map(pid => ({ productId: pid })) }));
@@ -1772,13 +1876,13 @@ const HamperBuilder = ({ open, onClose, items = [], existingClientCombos = [], s
               <div style={{ fontSize: 9, fontWeight: 800, color: 'rgba(26,26,26,0.4)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontFamily: "'Jost',sans-serif" }}>Total Budget</div>
               <input type="number" inputMode="numeric" placeholder="e.g. 5000" value={totalBudget}
                 onChange={e => setTotalBudget(e.target.value)}
-                style={{ ...num, width: 140, padding: '9px 14px', fontSize: 13, background: '#fff' }} />
+                style={{ ...num, width: 140, height: 34, boxSizing: 'border-box', padding: '0 14px', fontSize: 13, background: '#fff' }} />
             </div>
             <div style={{ flex: 1, minWidth: 240 }}>
               <div style={{ fontSize: 9, fontWeight: 800, color: 'rgba(26,26,26,0.4)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontFamily: "'Jost',sans-serif" }}>Categories <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#aaa' }}>(leave blank for all)</span></div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {categories.map(cat => (
-                  <button key={cat} style={chip(selCats.includes(cat))} onClick={() => toggleCat(cat)}>{cat}</button>
+                  <button key={cat} style={{ ...chip(selCats.includes(cat)), height: 34, boxSizing: 'border-box', display: 'inline-flex', alignItems: 'center', padding: '0 16px' }} onClick={() => toggleCat(cat)}>{cat}</button>
                 ))}
               </div>
             </div>
@@ -1850,7 +1954,11 @@ const HamperBuilder = ({ open, onClose, items = [], existingClientCombos = [], s
                             <div key={item._id} style={{ marginTop: 8 }}>
                               <div onClick={() => toggleCurrent(idStr)}
                                 style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', border: `1px solid ${selected ? 'rgba(184,151,90,0.5)' : 'rgba(0,0,0,0.08)'}`, borderRadius: 8, cursor: 'pointer', background: selected ? 'rgba(184,151,90,0.07)' : '#fff', transition: 'all .12s' }}>
-                                <div style={{ width: 42, height: 42, borderRadius: 6, overflow: 'hidden', flexShrink: 0, background: '#f7f5f1' }}>
+                                <div
+                                  onMouseEnter={item.imageUrl ? (e => showHoverPreview(item.imageUrl, e)) : undefined}
+                                  onMouseMove={item.imageUrl ? moveHoverPreview : undefined}
+                                  onMouseLeave={item.imageUrl ? hideHoverPreview : undefined}
+                                  style={{ width: 42, height: 42, borderRadius: 6, overflow: 'hidden', flexShrink: 0, background: '#f7f5f1' }}>
                                   {item.imageUrl && <img src={item.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -1876,7 +1984,11 @@ const HamperBuilder = ({ open, onClose, items = [], existingClientCombos = [], s
                               {hasGallery && galleryOpen && (
                                 <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 12px 4px 66px' }}>
                                   {imgs.map((src, i) => (
-                                    <div key={i} style={{ width: 48, height: 48, borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0 }}>
+                                    <div key={i}
+                                      onMouseEnter={e => showHoverPreview(src, e)}
+                                      onMouseMove={moveHoverPreview}
+                                      onMouseLeave={hideHoverPreview}
+                                      style={{ width: 48, height: 48, borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0, cursor: 'zoom-in' }}>
                                       <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                     </div>
                                   ))}
@@ -1893,12 +2005,13 @@ const HamperBuilder = ({ open, onClose, items = [], existingClientCombos = [], s
             </div>
           </div>
 
-          {/* Current hamper + saved hampers */}
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Current hamper + saved hampers — sticks together as one fixed panel while the catalogue on the left scrolls */}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16, alignSelf: 'flex-start', position: isMobile ? 'static' : 'sticky', top: isMobile ? 'auto' : 16, maxHeight: isMobile ? 'none' : 'calc(100vh - 32px)' }}>
 
-            <div style={{ background: '#faf8f5', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8, padding: 16, position: isMobile ? 'static' : 'sticky', top: 0 }}>
+            <div style={{ background: '#faf8f5', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8, padding: 16, flexShrink: 0 }}>
               <input type="text" placeholder="Name this hamper (optional)" value={currentName}
-                onChange={e => setCurrentName(e.target.value)}
+                onChange={e => setCurrentName(sanitizeText(e.target.value, 80))}
+                maxLength={80}
                 style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.1)', fontSize: 12, fontFamily: "'Jost',sans-serif", outline: 'none', marginBottom: 12, background: '#fff' }} />
 
               {currentIds.length === 0
@@ -1936,28 +2049,82 @@ const HamperBuilder = ({ open, onClose, items = [], existingClientCombos = [], s
             </div>
 
             {hampers.length > 0 && (
-              <div>
+              <div style={{ overflowY: 'auto', minHeight: 0 }}>
                 <div style={{ fontSize: 9, fontWeight: 800, color: 'rgba(26,26,26,0.4)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 10, fontFamily: "'Jost',sans-serif" }}>My Combos ({hampers.length})</div>
-                {hampers.map(h => (
-                  <div key={h.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '9px 12px', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 6, marginBottom: 8 }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.label}</div>
-                      <div style={{ fontSize: 10, color: '#999' }}>{h.productIds.length} item{h.productIds.length !== 1 ? 's' : ''} · {toINR(h.productIds.reduce((s, id) => s + Number(itemById(id)?.price || 0), 0))}</div>
+                {hampers.map(h => {
+                  const hOpen = !!expandedHampers[h.id];
+                  const thumbs = h.productIds.map(id => itemById(id)).filter(Boolean);
+                  return (
+                    <div key={h.id} style={{ border: '1px solid rgba(0,0,0,0.07)', borderRadius: 6, marginBottom: 8, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '9px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1, cursor: thumbs.length ? 'pointer' : 'default' }}
+                          onClick={() => thumbs.length && toggleHamperExpand(h.id)}>
+                          {thumbs.length > 0 && (
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#b8975a" strokeWidth="2.5" style={{ flexShrink: 0, transform: hOpen ? 'none' : 'rotate(-90deg)', transition: 'transform .2s' }}>
+                              <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                          )}
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontSize: 12, fontWeight: 500, color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.label}</span>
+                              {h.isSaved && <span style={{ fontSize: 8, fontWeight: 800, color: '#2e7d32', background: 'rgba(46,125,50,0.1)', padding: '1px 6px', borderRadius: 10, textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>Saved</span>}
+                            </div>
+                            <div style={{ fontSize: 10, color: '#999' }}>{h.productIds.length} item{h.productIds.length !== 1 ? 's' : ''} · {toINR(h.productIds.reduce((s, id) => s + Number(itemById(id)?.price || 0), 0))}</div>
+                          </div>
+                        </div>
+                        <button onClick={() => removeHamper(h.id)}
+                          title={h.isSaved ? 'Delete this combo from the Combo tab' : 'Remove'}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c0392b', fontSize: 15, flexShrink: 0 }}>×</button>
+                      </div>
+
+                      {hOpen && thumbs.length > 0 && (
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '0 12px 10px' }}>
+                          {thumbs.map((it, i) => (
+                            <div key={i}
+                              onMouseEnter={it.imageUrl ? (e => showHoverPreview(it.imageUrl, e)) : undefined}
+                              onMouseMove={it.imageUrl ? moveHoverPreview : undefined}
+                              onMouseLeave={it.imageUrl ? hideHoverPreview : undefined}
+                              title={it.name}
+                              style={{ width: 40, height: 40, borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0, background: '#f7f5f1', cursor: it.imageUrl ? 'zoom-in' : 'default' }}>
+                              {it.imageUrl && <img src={it.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <button onClick={() => removeHamper(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c0392b', fontSize: 15, flexShrink: 0 }}>×</button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
-            {error && <div style={{ fontSize: 11, color: '#c0392b' }}>{error}</div>}
+            {error && <div style={{ fontSize: 11, color: '#c0392b', flexShrink: 0 }}>{error}</div>}
 
-            <button style={{ ...primaryBtn, opacity: saving ? 0.6 : 1, cursor: saving ? 'wait' : 'pointer' }} disabled={saving} onClick={saveHampers}>
-              {saving ? 'Saving…' : `Save ${hampers.length || ''} to Combo Tab`}
-            </button>
+            {(() => {
+              const unsavedCount = hampers.filter(h => !h.isSaved).length;
+              const nothingToSave = unsavedCount === 0;
+              return (
+                <button style={{ ...primaryBtn, opacity: (saving || nothingToSave) ? 0.5 : 1, cursor: saving ? 'wait' : (nothingToSave ? 'not-allowed' : 'pointer'), flexShrink: 0 }}
+                  disabled={saving || nothingToSave} onClick={saveHampers}>
+                  {saving ? 'Saving…' : nothingToSave ? (hampers.length ? 'All combos saved ✓' : 'Save to Combo Tab') : `Save ${unsavedCount} to Combo Tab`}
+                </button>
+              );
+            })()}
           </div>
         </div>
       </div>
+
+      {/* Hover-to-zoom preview — bigger version of whichever thumbnail the cursor is over */}
+      {hoverPreview && (
+        <div style={{
+          position: 'fixed',
+          left: Math.min(hoverPreview.x + 24, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 260),
+          top: Math.min(hoverPreview.y + 24, (typeof window !== 'undefined' ? window.innerHeight : 800) - 260),
+          zIndex: 10000, pointerEvents: 'none', width: 240, height: 240, borderRadius: 10, overflow: 'hidden',
+          boxShadow: '0 16px 48px rgba(0,0,0,0.4)', border: '3px solid #fff', background: '#f7f5f1',
+        }}>
+          <img src={hoverPreview.src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        </div>
+      )}
     </div>
   );
 };
@@ -2189,7 +2356,7 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
 
           {/* Build a Hamper trigger */}
           {onBuildHamper && (
-            <button onClick={onBuildHamper}
+            <button onClick={() => onBuildHamper(catFilters)}
               style={{ marginLeft: 'auto', background: '#b8975a', color: '#0e1520', border: 'none', padding: '9px 20px', fontWeight: 500, fontSize: 10, cursor: 'pointer', fontFamily: "'Jost',sans-serif", letterSpacing: '0.15em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
               🎁 Build a Hamper
             </button>

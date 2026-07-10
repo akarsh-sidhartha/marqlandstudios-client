@@ -15,6 +15,9 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { Plus, Trash2, Upload, LogOut, RefreshCw, AlertTriangle, CheckCircle2, Clock, X, XCircle, Video } from 'lucide-react';
 import { MARQLAND_THEME_CSS } from '../../styles/marqlandTheme'; // NEW — same .fi/.btn-gold/.pill/.sf/.nav classes as HomePage
+import {
+  sanitizeName, sanitizeMessage, isValidName, isValidMessage, isSafeUrl, normalizeUrl, GENERIC_INVALID_MESSAGE,
+} from '../../utils/inputValidation'; // NEW — security hardening, same helpers used on HomePage/PartnerPage
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
@@ -54,8 +57,14 @@ const SupplierPortal = ({ session, onLogout }) => {
     rows.forEach((row, i) => {
       const rowErr = [];
       if (!row.brand.trim()) rowErr.push('Brand is required');
+      else if (!isValidName(row.brand)) rowErr.push('Brand: ' + GENERIC_INVALID_MESSAGE);
       if (!row.name.trim()) rowErr.push('Product name is required');
+      else if (!isValidName(row.name)) rowErr.push('Product name: ' + GENERIC_INVALID_MESSAGE);
       if (!row.description.trim()) rowErr.push('Description is required');
+      else if (!isValidMessage(row.description)) rowErr.push('Description: ' + GENERIC_INVALID_MESSAGE);
+      // NEW — security hardening: video URL, if typed rather than uploaded,
+      // must be a well-formed http(s) link (blocks javascript:/data: URIs).
+      if (row.videoUrl && !isSafeUrl(row.videoUrl)) rowErr.push('Video URL must be a valid http(s) link');
       if (!row.imageFile) rowErr.push('Primary image is required');
       if (!row.sellingPrice || Number(row.sellingPrice) <= 0) rowErr.push('Selling price is required');
       if (rowErr.length) errs[i] = rowErr;
@@ -71,7 +80,9 @@ const SupplierPortal = ({ session, onLogout }) => {
     try {
       const fd = new FormData();
       fd.append('rows', JSON.stringify(rows.map(r => ({
-        brand: r.brand, name: r.name, description: r.description, videoUrl: r.videoUrl, sellingPrice: r.sellingPrice,
+        brand: r.brand, name: r.name, description: r.description,
+        videoUrl: r.videoUrl ? normalizeUrl(r.videoUrl) : '', // NEW — prepend https:// if protocol omitted
+        sellingPrice: r.sellingPrice,
       }))));
       rows.forEach((row, i) => {
         if (row.imageFile) fd.append(`image_${i}`, row.imageFile);
@@ -96,6 +107,7 @@ const SupplierPortal = ({ session, onLogout }) => {
   const [mySubmissions, setMySubmissions] = useState([]);
   const [loadingSubs, setLoadingSubs] = useState(false);
   const [editing, setEditing] = useState(null); // the submission object being edited, or null
+  const [editError, setEditError] = useState(''); // NEW — security hardening validation feedback
 
   const loadSubmissions = useCallback(async () => {
     setLoadingSubs(true);
@@ -130,12 +142,21 @@ const SupplierPortal = ({ session, onLogout }) => {
   });
 
   const saveEdit = async () => {
+    // NEW — security hardening: re-validate before resubmit, same rules
+    // as the Add Products form (and mirrored server-side in supplierRoutes.js).
+    if (!isValidName(editing.brand)) return setEditError('Brand: ' + GENERIC_INVALID_MESSAGE);
+    if (!isValidName(editing.name)) return setEditError('Product name: ' + GENERIC_INVALID_MESSAGE);
+    if (!isValidMessage(editing.description)) return setEditError('Description: ' + GENERIC_INVALID_MESSAGE);
+    const videoUrlToSend = editing.newVideoFile ? '' : (editing.videoUrl || '');
+    if (videoUrlToSend && !isSafeUrl(videoUrlToSend)) return setEditError('Video URL must be a valid http(s) link');
+    setEditError('');
+
     try {
       const fd = new FormData();
       fd.append('brand', editing.brand);
       fd.append('name', editing.name);
       fd.append('description', editing.description);
-      fd.append('videoUrl', editing.newVideoFile ? '' : (editing.videoUrl || ''));
+      fd.append('videoUrl', videoUrlToSend ? normalizeUrl(videoUrlToSend) : '');
       fd.append('sellingPrice', editing.sellingPrice || ''); // NEW
       if (editing.newImageFile) fd.append('image', editing.newImageFile);
       (editing.newGalleryFiles || []).forEach(f => fd.append('gallery', f));
@@ -147,7 +168,7 @@ const SupplierPortal = ({ session, onLogout }) => {
       setEditing(null);
       loadSubmissions();
     } catch (err) {
-      alert(err.response?.data?.message || 'Resubmit failed.');
+      setEditError(err.response?.data?.message || 'Resubmit failed.');
     }
   };
 
@@ -238,11 +259,11 @@ const SupplierPortal = ({ session, onLogout }) => {
                   )}
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
-                    <input className="fi" placeholder="Brand Name *" value={row.brand} onChange={e => updateRow(row._key, { brand: e.target.value })} />
-                    <input className="fi" placeholder="Product Name *" value={row.name} onChange={e => updateRow(row._key, { name: e.target.value })} />
+                    <input className="fi" placeholder="Brand Name *" value={row.brand} onChange={e => updateRow(row._key, { brand: sanitizeName(e.target.value) })} />
+                    <input className="fi" placeholder="Product Name *" value={row.name} onChange={e => updateRow(row._key, { name: sanitizeName(e.target.value) })} />
                     <input className="fi" type="number" placeholder="Selling Price (₹) *" value={row.sellingPrice} onChange={e => updateRow(row._key, { sellingPrice: e.target.value })} />
                   </div>
-                  <textarea className="fi" rows={3} placeholder="Product Description *" value={row.description} onChange={e => updateRow(row._key, { description: e.target.value })} style={{ width: '100%', resize: 'none', marginBottom: 12 }} />
+                  <textarea className="fi" rows={3} placeholder="Product Description *" value={row.description} onChange={e => updateRow(row._key, { description: sanitizeMessage(e.target.value) })} style={{ width: '100%', resize: 'none', marginBottom: 12 }} />
                   <input className="fi" placeholder="YouTube / video URL (optional — or upload a video file below)" value={row.videoUrl}
                     onChange={e => updateRow(row._key, { videoUrl: e.target.value })} style={{ width: '100%', marginBottom: 16 }} disabled={!!row.videoFile} />
 
@@ -358,13 +379,14 @@ const SupplierPortal = ({ session, onLogout }) => {
       {editing && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(6,10,18,0.75)', backdropFilter: 'blur(8px)' }}>
           <div style={{ background: 'var(--navy, #0e1520)', width: '100%', maxWidth: 520, padding: 32, position: 'relative', border: '1px solid rgba(184,151,90,0.2)', maxHeight: '86vh', overflowY: 'auto' }}>
-            <button onClick={() => setEditing(null)} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', color: 'rgba(255,255,255,0.28)', cursor: 'pointer' }}><X size={18} /></button>
+            <button onClick={() => { setEditing(null); setEditError(''); }} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', color: 'rgba(255,255,255,0.28)', cursor: 'pointer' }}><X size={18} /></button>
             <h2 className="sf" style={{ fontSize: 22, fontWeight: 300, marginBottom: 20 }}>Edit Submission</h2>
+            {editError && <p style={{ fontSize: 12, color: '#e08585', marginBottom: 12 }}>{editError}</p>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <input className="fi" placeholder="Brand" value={editing.brand} onChange={e => setEditing({ ...editing, brand: e.target.value })} />
-              <input className="fi" placeholder="Product Name" value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} />
+              <input className="fi" placeholder="Brand" value={editing.brand} onChange={e => setEditing({ ...editing, brand: sanitizeName(e.target.value) })} />
+              <input className="fi" placeholder="Product Name" value={editing.name} onChange={e => setEditing({ ...editing, name: sanitizeName(e.target.value) })} />
               <input className="fi" type="number" placeholder="Selling Price (₹)" value={editing.sellingPrice || ''} onChange={e => setEditing({ ...editing, sellingPrice: e.target.value })} />
-              <textarea className="fi" rows={3} placeholder="Description" value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} style={{ resize: 'none' }} />
+              <textarea className="fi" rows={3} placeholder="Description" value={editing.description} onChange={e => setEditing({ ...editing, description: sanitizeMessage(e.target.value) })} style={{ resize: 'none' }} />
               <input className="fi" placeholder="Video URL" value={editing.videoUrl || ''}
                 onChange={e => setEditing({ ...editing, videoUrl: e.target.value })} disabled={!!editing.newVideoFile} />
               <label style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', cursor: 'pointer' }}>
