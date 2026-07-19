@@ -42,9 +42,10 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import {
-  ShieldCheck, Share2, TrendingUp, Lightbulb, UploadCloud, X, LogIn, Check, Loader2, Eye, EyeOff, Mail,Link2,
+  ShieldCheck, Share2, TrendingUp, Lightbulb, UploadCloud, LogIn, Check, Loader2, Eye, EyeOff, Mail,Link2,
 } from 'lucide-react';
 import SupplierPortal from './SupplierPortal';
+import LoginPopup from '../../components/LoginPopup';
 import { MARQLAND_THEME_CSS } from '../../styles/marqlandTheme';
 import {
   sanitizeName, sanitizePhone, sanitizeMessage,
@@ -131,17 +132,11 @@ const PartnerPage = () => {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
 
+  // CHANGED — login + its "Forgot password?" mini-flow now live in the
+  // shared <LoginPopup> component (src/components/LoginPopup.js), reused
+  // across Partner/Job Work/Courier so the login UX (incl. the password
+  // eye-toggle) is identical everywhere. Only the open/close flag stays here.
   const [showLogin, setShowLogin] = useState(false);
-  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-  const [loginError, setLoginError] = useState('');
-  const [loggingIn, setLoggingIn] = useState(false);
-  const [showLoginPassword, setShowLoginPassword] = useState(false); // NEW — eye toggle
-
-  // NEW — "Forgot password?" mini-flow inside the login popup
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotSubmitting, setForgotSubmitting] = useState(false);
-  const [forgotSent, setForgotSent] = useState(false);
 
   // NEW — invite-token registration state
   const [inviteToken] = useState(() => new URLSearchParams(window.location.search).get('token'));
@@ -172,24 +167,6 @@ const PartnerPage = () => {
         setInviteState(err.response?.status === 410 ? 'expired' : 'invalid');
       });
   }, [inviteToken]);
-
-  const submitForgotPassword = async (e) => {
-    e.preventDefault();
-    if (!isValidEmail(forgotEmail)) {
-      setLoginError('Please enter a valid email address.');
-      return;
-    }
-    setForgotSubmitting(true);
-    setLoginError('');
-    try {
-      await axios.post(`${API_BASE}/api/auth/forgot-password`, { email: forgotEmail });
-      setForgotSent(true);
-    } catch {
-      setForgotSent(true); // backend always responds generically — never reveals whether the email exists
-    } finally {
-      setForgotSubmitting(false);
-    }
-  };
 
   const submitResetPassword = async (e) => {
     e.preventDefault();
@@ -302,36 +279,6 @@ const PartnerPage = () => {
       setError(err.response?.data?.message || 'Something went wrong. Please try again.');
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const submitLogin = async (e) => {
-    e.preventDefault();
-    // NEW — security hardening: validate email format client-side. Password
-    // is intentionally NOT restricted to alphanumeric — it's hashed and
-    // never rendered/executed anywhere, so there's no XSS surface there,
-    // and restricting its character set would only make it weaker.
-    if (!isValidEmail(loginForm.email)) {
-      setLoginError('Please enter a valid email address.');
-      return;
-    }
-    setLoggingIn(true);
-    setLoginError('');
-    try {
-      const res = await axios.post(`${API_BASE}/api/auth/login`, loginForm);
-      const { accessToken, user } = res.data;
-      if (user.role !== 'supplier') {
-        setLoginError('This login is for approved Partners only.');
-        return;
-      }
-      const session = { accessToken, user };
-      sessionStorage.setItem('supplierSession', JSON.stringify(session));
-      setSupplierSession(session);
-      setShowLogin(false);
-    } catch (err) {
-      setLoginError(err.response?.data?.message || 'Login failed.');
-    } finally {
-      setLoggingIn(false);
     }
   };
 
@@ -737,62 +684,17 @@ const PartnerPage = () => {
         </div>
       </footer>
 
-      {/* ── Login popup ── */}
-      {showLogin && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(6,10,18,0.75)', backdropFilter: 'blur(8px)' }}>
-          <div className="pp-gold-border" style={{ background: C.surfaceDeep, width: '100%', maxWidth: 420, padding: '44px 40px', position: 'relative' }}>
-            <button onClick={() => { setShowLogin(false); setShowForgotPassword(false); setForgotSent(false); }}
-              style={{ position: 'absolute', top: 18, right: 18, background: 'none', border: 'none', color: 'rgba(226,226,226,0.4)', cursor: 'pointer' }}><X size={18} /></button>
-
-            {!showForgotPassword ? (
-              <>
-                <h2 className="sf" style={{ fontSize: 26, color: C.primary, fontWeight: 500, marginBottom: 24 }}>Partner Login</h2>
-                <form onSubmit={submitLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <input className="fi" required type="email" placeholder="Email" value={loginForm.email} onChange={e => setLoginForm({ ...loginForm, email: e.target.value })} />
-                  <div style={{ position: 'relative' }}>
-                    <input className="fi" required type={showLoginPassword ? 'text' : 'password'} placeholder="Password" value={loginForm.password}
-                      onChange={e => setLoginForm({ ...loginForm, password: e.target.value })} style={{ paddingRight: 44 }} />
-                    <button type="button" onClick={() => setShowLoginPassword(v => !v)}
-                      style={{ position: 'absolute', right: 12, top: 12, background: 'none', border: 'none', cursor: 'pointer', color: C.onSurfaceVariant }}>
-                      {showLoginPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                  {loginError && <p style={{ color: '#ffb4ab', fontSize: 12 }}>{loginError}</p>}
-                  <button type="submit" disabled={loggingIn} className="btn-gold" style={{ marginTop: 4 }}>
-                    {loggingIn ? 'Logging in…' : 'Log In'}
-                  </button>
-                  <button type="button" onClick={() => setShowForgotPassword(true)}
-                    style={{ background: 'none', border: 'none', color: C.onSurfaceVariant, fontSize: 12, cursor: 'pointer', textAlign: 'center', textDecoration: 'underline' }}>
-                    Forgot password?
-                  </button>
-                </form>
-              </>
-            ) : (
-              <>
-                <h2 className="sf" style={{ fontSize: 24, color: C.primary, fontWeight: 500, marginBottom: 16 }}>Reset Password</h2>
-                {!forgotSent ? (
-                  <form onSubmit={submitForgotPassword} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    <p style={{ fontSize: 13, color: C.onSurfaceVariant }}>Enter your email and we'll send you a link to reset your password.</p>
-                    <input className="fi" required type="email" placeholder="Email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} />
-                    {loginError && <p style={{ color: '#ffb4ab', fontSize: 12 }}>{loginError}</p>}
-                    <button type="submit" disabled={forgotSubmitting} className="btn-gold">
-                      {forgotSubmitting ? 'Sending…' : 'Send Reset Link'}
-                    </button>
-                    <button type="button" onClick={() => setShowForgotPassword(false)}
-                      style={{ background: 'none', border: 'none', color: C.onSurfaceVariant, fontSize: 12, cursor: 'pointer', textAlign: 'center', textDecoration: 'underline' }}>
-                      Back to Login
-                    </button>
-                  </form>
-                ) : (
-                  <p style={{ fontSize: 14, color: C.onSurfaceVariant, lineHeight: 1.7 }}>
-                    If that email is registered, a reset link has been sent. Check your inbox and follow the link to set a new password.
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      {/* ── Login popup — shared component, also used by Job Work/Courier ── */}
+      <LoginPopup
+        show={showLogin}
+        onClose={() => setShowLogin(false)}
+        accentColor={C.primary}
+        title="Partner Login"
+        allowedRoles={['supplier']}
+        wrongRoleMessage="This login is for approved Partners only."
+        sessionStorageKey="supplierSession"
+        onLoginSuccess={(session) => { setSupplierSession(session); setShowLogin(false); }}
+      />
     </div>
   );
 };

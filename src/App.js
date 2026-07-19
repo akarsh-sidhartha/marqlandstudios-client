@@ -2,7 +2,8 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import ClientPortalView from './pages/ClientPortalView';
-import PartnerPage from './pages/partner/PartnerPage'; // NEW — Supplier Portal public entry point
+import PartnerPage from './pages/partner/PartnerPage'; 
+import JobWorkPage from './pages/jobwork/JobWorkPage';
 import './App.css';
 
 function App() {
@@ -17,6 +18,9 @@ function App() {
 
         {/* Partner registration + login → Supplier Portal */}
         <Route path="/partner" element={<PartnerPage />} />
+
+        {/* Jobwork registration + login → Jobwork Portal */}
+        <Route path="/job-work" element={<JobWorkPage />} />
       </Routes>
     </Router>
   );
