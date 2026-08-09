@@ -11,10 +11,10 @@
  * via the Bearer token from the Partner login popup (session.accessToken).
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import axios from 'axios';
-import { Plus, Trash2, Upload, LogOut, RefreshCw, AlertTriangle, CheckCircle2, Clock, X, XCircle, Video } from 'lucide-react';
+import { Plus, Trash2, Upload, RefreshCw, AlertTriangle, CheckCircle2, Clock, X, XCircle, Video } from 'lucide-react';
 import { MARQLAND_THEME_CSS } from '../../styles/marqlandTheme'; // NEW — same .fi/.btn-gold/.pill/.sf/.nav classes as HomePage
+import NavBar from '../../components/NavBar';
 import {
   sanitizeName, sanitizeMessage, isValidName, isValidMessage, isSafeUrl, normalizeUrl, GENERIC_INVALID_MESSAGE,
 } from '../../utils/inputValidation'; // NEW — security hardening, same helpers used on HomePage/PartnerPage
@@ -191,16 +191,7 @@ const SupplierPortal = ({ session, onLogout }) => {
     <div style={{ minHeight: '100vh', background: 'var(--navy, #0e1520)', color: 'white' }}>
       <style>{MARQLAND_THEME_CSS}</style>
 
-      {/* NEW — same .nav layout/classes as the marketing page: logo far left,
-          primary action (Logout, here) far right. */}
-      <nav className="nav" style={{ background: 'rgba(14,21,32,0.94)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <Link to="/" className="nav-logo sf" style={{ textDecoration: 'none' }}>Marqland Studios</Link>
-        <div className="nav-links">
-          <button onClick={onLogout} className="btn-gold" style={{ padding: '10px 22px', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <LogOut size={13} /> Log Out
-          </button>
-        </div>
-      </nav>
+      <NavBar authState="logout" onLogout={onLogout} />
 
       <div style={{ maxWidth: 980, margin: '0 auto', padding: '108px 24px 40px' }}>
         <div style={{ marginBottom: 8 }}>

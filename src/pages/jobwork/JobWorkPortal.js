@@ -16,10 +16,10 @@
  * (session.accessToken) — same auth pattern as SupplierPortal.js.
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import axios from 'axios';
+import NavBar from '../../components/NavBar';
 import {
-  Plus, Trash2, Upload, Camera, LogOut, X, Search, Calendar, Pencil,
+  Plus, Trash2, Upload, Camera, X, Search, Calendar, Pencil,
   CheckCircle2, Clock, Archive, MessageSquare, Loader2, ChevronDown,
 } from 'lucide-react';
 import { MARQLAND_THEME_CSS } from '../../styles/marqlandTheme';
@@ -165,14 +165,7 @@ const JobWorkPortal = ({ session, onLogout }) => {
     <div style={{ minHeight: '100vh', background: 'var(--navy)', color: 'rgba(255,255,255,0.85)', fontFamily: "'Jost', sans-serif" }}>
       <style>{MARQLAND_THEME_CSS}</style>
 
-      <nav className="nav" style={{ background: 'rgba(14,21,32,0.94)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <Link to="/" className="nav-logo sf" style={{ textDecoration: 'none' }}>Marqland Studios</Link>
-        <div className="nav-links">
-          <button onClick={onLogout} className="btn-gold" style={{ padding: '10px 22px', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <LogOut size={13} /> Log Out
-          </button>
-        </div>
-      </nav>
+      <NavBar authState="logout" onLogout={onLogout} mobileMenu />
 
       <div style={{ maxWidth: 1080, margin: '0 auto', padding: '108px 24px 60px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16, marginBottom: 8 }}>

@@ -42,10 +42,11 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import {
-  ShieldCheck, Share2, TrendingUp, Lightbulb, UploadCloud, LogIn, Check, Loader2, Eye, EyeOff, Mail,Link2,
+  ShieldCheck, Share2, TrendingUp, Lightbulb, UploadCloud, Check, Loader2, Eye, EyeOff, Mail,Link2,
 } from 'lucide-react';
 import SupplierPortal from './SupplierPortal';
 import LoginPopup from '../../components/LoginPopup';
+import NavBar from '../../components/NavBar';
 import { MARQLAND_THEME_CSS } from '../../styles/marqlandTheme';
 import {
   sanitizeName, sanitizePhone, sanitizeMessage,
@@ -445,14 +446,12 @@ const PartnerPage = () => {
       <FontLoader />
 
       {/* ── Nav — same classes/fonts/behavior as HomePage.js ── */}
-      <nav className="nav" style={{ background: scrolled ? 'rgba(14,21,32,0.94)' : 'rgba(14,21,32,0.52)', borderBottom: scrolled ? '1px solid rgba(255,255,255,0.05)' : '1px solid transparent' }}>
-        <Link to="/" className="nav-logo sf" style={{ textDecoration: 'none' }}>Marqland Studios</Link>
-        <div className="nav-links">
-          <button className="btn-gold" style={{ padding: '10px 22px', display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => setShowLogin(true)}>
-            <LogIn size={13} /> Login
-          </button>
-        </div>
-      </nav>
+      <NavBar
+        authState="login"
+        onLoginClick={() => setShowLogin(true)}
+        loginLabel="Login"
+        scrolled={scrolled}
+      />
 
       <main style={{ paddingTop: 68 }}>
         {/* ── Hero ── */}

@@ -22,12 +22,12 @@
  * root for the one line to add.
  */
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import axios from 'axios';
-import { Check, Loader2, Eye, EyeOff, LogIn } from 'lucide-react';
+import { Check, Loader2, Eye, EyeOff } from 'lucide-react';
 import JobWorkPortal from './JobWorkPortal';
 import CourierPortal from './CourierPortal';
 import LoginPopup from '../../components/LoginPopup';
+import NavBar from '../../components/NavBar';
 import { MARQLAND_THEME_CSS } from '../../styles/marqlandTheme';
 import {
   sanitizeName, isValidName, isValidPassword, GENERIC_INVALID_MESSAGE,
@@ -285,14 +285,7 @@ const JobWorkPage = () => {
       <style>{JOBWORK_PAGE_CSS}</style>
       <FontLoader />
 
-      <nav className="nav" style={{ background: 'rgba(14,21,32,0.94)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <Link to="/" className="nav-logo sf" style={{ textDecoration: 'none' }}>Marqland Studios</Link>
-        <div className="nav-links">
-          <button onClick={() => setShowLogin(true)} className="btn-gold" style={{ padding: '10px 22px', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <LogIn size={13} /> Log In
-          </button>
-        </div>
-      </nav>
+      <NavBar authState="login" onLoginClick={() => setShowLogin(true)} loginLabel="Log In" mobileMenu />
 
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '160px 24px 80px', textAlign: 'center' }}>
         <span className="pill">Job Work &amp; Courier Portal</span>
