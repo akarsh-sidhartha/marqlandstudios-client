@@ -23,9 +23,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import NavBar from '../../components/NavBar';
+import BarcodeScannerModal from '../../components/BarcodeScannerModal';
 import {
   Plus, Trash2, Pencil, X, Search, Calendar, Clock, CheckCircle2,
-  Archive, Loader2, Truck, RotateCcw,
+  Archive, Loader2, Truck, RotateCcw, Camera as CameraIcon,
 } from 'lucide-react';
 import { MARQLAND_THEME_CSS } from '../../styles/marqlandTheme';
 import { isValidMessage, sanitizeMessage, GENERIC_INVALID_MESSAGE } from '../../utils/jobWorkValidation';
@@ -59,6 +60,22 @@ const emptyForm = () => ({
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 const distinctSorted = (arr, key) => [...new Set(arr.map(s => s[key]).filter(Boolean))].sort();
 
+// Camera-based barcode scan is a mobile-only affordance — on desktop a
+// courier just types/pastes the tracking ID as before, so the scan button
+// only renders below this breakpoint.
+const MOBILE_BREAKPOINT = 640;
+const useIsMobile = (breakpoint = MOBILE_BREAKPOINT) => {
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth <= breakpoint
+  );
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= breakpoint);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [breakpoint]);
+  return isMobile;
+};
+
 // Native <select> option popups are OS-rendered — the dark theme's white
 // text becomes invisible against that white popup unless options are
 // explicitly given light-background/dark-text colors of their own.
@@ -67,6 +84,7 @@ const optionStyle = { color: '#1a1a1a', background: '#ffffff' };
 
 const CourierPortal = ({ session, onLogout }) => {
   const authHeader = { Authorization: `Bearer ${session.accessToken}` };
+  const isMobile = useIsMobile();
 
   const [tab, setTab] = useState('active');
   const [shipments, setShipments] = useState([]);
@@ -89,6 +107,7 @@ const CourierPortal = ({ session, onLogout }) => {
   const [formErrors, setFormErrors] = useState([]);
   const [saving, setSaving] = useState(false);
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
+  const [showScanner, setShowScanner] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -142,6 +161,13 @@ const CourierPortal = ({ session, onLogout }) => {
   const handleStateChange = (newState) => {
     setForm(f => ({ ...f, state: newState, city: '' }));
     setCityManual(false);
+  };
+
+  // Scanned value overwrites whatever was typed so far — the courier tapped
+  // "scan" specifically to avoid typing, so partial manual input shouldn't linger.
+  const handleBarcodeDetected = (code) => {
+    setForm(f => ({ ...f, trackingId: code }));
+    setShowScanner(false);
   };
 
   const validateForm = () => {
@@ -487,7 +513,19 @@ const CourierPortal = ({ session, onLogout }) => {
               </div>
               <div>
                 <label className="lbl">Tracking ID</label>
-                <input className="fi" value={form.trackingId} onChange={e => setForm(f => ({ ...f, trackingId: e.target.value }))} />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input className="fi" style={{ flex: 1, minWidth: 0 }} value={form.trackingId}
+                    onChange={e => setForm(f => ({ ...f, trackingId: e.target.value }))} />
+                  {isMobile && (
+                    <button type="button" onClick={() => setShowScanner(true)} title="Scan barcode" style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, flexShrink: 0,
+                      background: 'none', border: '1px solid rgba(184,151,90,0.4)', color: '#d4b06a',
+                      cursor: 'pointer', borderRadius: 2,
+                    }}>
+                      <CameraIcon size={15} />
+                    </button>
+                  )}
+                </div>
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label className="lbl">Shipping Partner</label>
@@ -515,6 +553,14 @@ const CourierPortal = ({ session, onLogout }) => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── Barcode scan overlay — opened from the Tracking ID field, mobile only ── */}
+      {showScanner && (
+        <BarcodeScannerModal
+          onDetected={handleBarcodeDetected}
+          onClose={() => setShowScanner(false)}
+        />
       )}
     </div>
   );
