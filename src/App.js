@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage';
 import ClientPortalView from './pages/ClientPortalView';
 import PartnerPage from './pages/partner/PartnerPage'; 
 import JobWorkPage from './pages/jobwork/JobWorkPage';
+import InstallPrompt from './components/InstallPrompt';
 import './App.css';
 
 function App() {
@@ -22,6 +23,8 @@ function App() {
         {/* Jobwork registration + login → Jobwork Portal */}
         <Route path="/job-work" element={<JobWorkPage />} />
       </Routes>
+
+      <InstallPrompt />
     </Router>
   );
 }
