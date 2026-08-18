@@ -3,6 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { initNotifications, requestNotifPermission, pushNotif, subscribeToPortalPush } from '../utils/portalNotifications';
 import { createLogger } from '../utils/logger';
+// NOTE: adjust this relative path if indiaLocations.js lives elsewhere in your project
+import { SearchableSelect } from '../utils/indiaLocations';
 
 // REQUIRED in production: set REACT_APP_API_URL to your backend URL in the build environment
 // e.g. REACT_APP_API_URL=https://api.marqlandstudios.com  (no trailing slash)
@@ -44,6 +46,46 @@ const DS = {
 
 const GOLD_GRAD = 'linear-gradient(135deg, #d4b06a, #b8975a)';
 const GLASS_BG = '#ffffff';
+
+// ── Shipment tracking tab config ──────────────────────────────────────────────
+const SHIP_PAGE_SIZE = 100;
+
+// Maps a courier/shipping partner name (as stored on the shipment record) to its
+// public tracking page. The user still has to paste in the tracking number
+// themselves — we just get them to the right page in a new tab.
+// Matching is case-insensitive and tolerant of partial names (e.g. "Blue Dart Express"
+// still matches "Blue Dart"), so keep the keys as short canonical fragments.
+const COURIER_TRACKING_URLS = {
+  'delhivery': 'https://www.delhivery.com/tracking',
+  'blue dart': 'https://www.bluedart.com/tracking',
+  'bluedart': 'https://www.bluedart.com/tracking',
+  'dtdc': 'https://www.dtdc.in/tracking.asp',
+  'ekart': 'https://ekartlogistics.com/track/',
+  'xpressbees': 'https://www.xpressbees.com/track',
+  'shadowfax': 'https://www.shadowfax.in/track',
+  'india post': 'https://www.indiapost.gov.in/_layouts/15/dop.portal.tracking/trackconsignment.aspx',
+  'speed post': 'https://www.indiapost.gov.in/_layouts/15/dop.portal.tracking/trackconsignment.aspx',
+  'fedex': 'https://www.fedex.com/en-in/tracking.html',
+  'dhl': 'https://www.dhl.com/in-en/home/tracking.html',
+  'ecom express': 'https://ecomexpress.in/tracking/',
+  'amazon': 'https://www.amazon.in/gp/your-account/order-history',
+  'shree maruti': 'https://www.shreemaruti.com/track',
+  'professional couriers': 'https://www.tpcindia.com/track_results.aspx',
+  'gati': 'https://www.gati.com/track-your-shipment/',
+  'trackon': 'https://trackon.in/',
+  'ups': 'https://www.ups.com/track',
+};
+
+// Resolves a shipping partner's tracking URL. Falls back to a generic Google
+// search for the courier's tracking page when we don't have it mapped, so the
+// button is still useful instead of doing nothing.
+const getCourierTrackingUrl = (partnerName) => {
+  if (!partnerName) return null;
+  const key = partnerName.trim().toLowerCase();
+  const match = Object.keys(COURIER_TRACKING_URLS).find(k => key.includes(k));
+  if (match) return COURIER_TRACKING_URLS[match];
+  return `https://www.google.com/search?q=${encodeURIComponent(partnerName + ' courier tracking')}`;
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const toINR = v => `₹${Number(v || 0).toLocaleString('en-IN')}`;
@@ -94,6 +136,10 @@ const Ic = {
   heart: <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>,
   heartO: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>,
   play: <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>,
+  upArrow: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg>,
+  search: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>,
+  chevL: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>,
+  chevR: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>,
 };
 
 // ── Lightbox — supports single image OR gallery navigation ───────────────────
@@ -644,6 +690,10 @@ const ClientPortalView = () => {
   const [shipments, setShipments] = useState([]);
   const [shipmentsLoaded, setShipmentsLoaded] = useState(false);
   const [shipFilter, setShipFilter] = useState('all');
+  const [shipStateFilter, setShipStateFilter] = useState('');
+  const [shipCityFilter, setShipCityFilter] = useState('');
+  const [shipNameSearch, setShipNameSearch] = useState('');
+  const [shipPage, setShipPage] = useState(1);
   const [toasts, setToasts] = useState([]);
   const chatEnd = useRef(null);
   const fileRef = useRef(null);
@@ -730,6 +780,14 @@ const ClientPortalView = () => {
       .then(data => { const arr = Array.isArray(data) ? data : []; log.info('Shipments loaded', { count: arr.length }); setShipments(arr); setShipmentsLoaded(true); })
       .catch(err => { log.error('Shipments fetch failed', err.message); setShipmentsLoaded(true); });
   }, [tab, shipmentsLoaded, portal, slug]);
+
+  // City filter is scoped to the selected state — clear it whenever the state changes
+  // so we never end up with a city selected that doesn't belong to the chosen state.
+  useEffect(() => { setShipCityFilter(''); }, [shipStateFilter]);
+
+  // Any change to a shipment filter should snap pagination back to page 1,
+  // otherwise the user can land on an empty page 3 of a newly-narrowed list.
+  useEffect(() => { setShipPage(1); }, [shipFilter, shipStateFilter, shipCityFilter, shipNameSearch]);
 
   const load = async (silent = false) => {
     if (!silent) log.debug('Loading portal', { slug });
@@ -1116,7 +1174,27 @@ const ClientPortalView = () => {
             </div>
           );
           const STATUSES = ['Booked', 'In Transit', 'Out for Delivery', 'Delivered', 'Returned', 'Exception'];
-          const filtered = shipFilter === 'all' ? shipments : shipments.filter(s => s.status === shipFilter);
+
+          // Options for the State / City filters are derived from the shipments
+          // actually present, so the dropdown never offers a state/city with zero results.
+          const availableStates = [...new Set(shipments.map(s => s.state).filter(Boolean))].sort();
+          const cityPool = shipStateFilter ? shipments.filter(s => s.state === shipStateFilter) : shipments;
+          const availableCities = [...new Set(cityPool.map(s => s.city).filter(Boolean))].sort();
+
+          // Combine every active filter — status, state, city, and recipient-name search.
+          let filtered = shipFilter === 'all' ? shipments : shipments.filter(s => s.status === shipFilter);
+          if (shipStateFilter) filtered = filtered.filter(s => s.state === shipStateFilter);
+          if (shipCityFilter) filtered = filtered.filter(s => s.city === shipCityFilter);
+          if (shipNameSearch.trim()) {
+            const q = shipNameSearch.trim().toLowerCase();
+            filtered = filtered.filter(s => (s.recipientName || '').toLowerCase().includes(q));
+          }
+
+          // Pagination — max 100 rows per page.
+          const totalShipPages = Math.max(1, Math.ceil(filtered.length / SHIP_PAGE_SIZE));
+          const shipPageSafe = Math.min(shipPage, totalShipPages);
+          const paginated = filtered.slice((shipPageSafe - 1) * SHIP_PAGE_SIZE, shipPageSafe * SHIP_PAGE_SIZE);
+
           const downloadExcel = () => {
             const headers = ['Recipient', 'City', 'State', 'Phone', 'Tracking ID', 'Partner', 'Status', 'Updated'];
             const rows = shipments.map(s => [
@@ -1153,6 +1231,57 @@ const ClientPortalView = () => {
                 </button>
               </div>
 
+              {/* Filter bar — recipient search + state/city location filters */}
+              <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                {/* Recipient name search */}
+                <div style={{ flex: '1 1 220px', minWidth: 180 }}>
+                  <label style={{ display: 'block', fontSize: 9, fontWeight: 800, color: '#888888', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 5, fontFamily: "'Jost',sans-serif" }}>Recipient Name</label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#888888', display: 'flex' }}>{Ic.search}</span>
+                    <input
+                      value={shipNameSearch}
+                      onChange={e => setShipNameSearch(sanitizeText(e.target.value, 80))}
+                      placeholder="Search by name…"
+                      style={{ width: '100%', padding: '8px 12px 8px 32px', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8, fontSize: 13, outline: 'none', color: '#1a1a1a', fontFamily: "'Jost',sans-serif", background: '#fff' }}
+                    />
+                    {shipNameSearch && (
+                      <span onClick={() => setShipNameSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#888888', cursor: 'pointer', display: 'flex' }}>{Ic.close}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* State filter — searchable */}
+                <div style={{ flex: '1 1 170px', minWidth: 150 }}>
+                  <SearchableSelect
+                    label="State"
+                    value={shipStateFilter}
+                    onChange={setShipStateFilter}
+                    options={availableStates}
+                    placeholder="All States"
+                  />
+                </div>
+
+                {/* City filter — searchable, enabled only once a state is chosen */}
+                <div style={{ flex: '1 1 170px', minWidth: 150 }}>
+                  <SearchableSelect
+                    label="City"
+                    value={shipCityFilter}
+                    onChange={setShipCityFilter}
+                    options={availableCities}
+                    placeholder={shipStateFilter ? 'All Cities' : 'Select a state first'}
+                    disabled={!shipStateFilter}
+                  />
+                </div>
+
+                {(shipStateFilter || shipCityFilter || shipNameSearch) && (
+                  <button
+                    onClick={() => { setShipStateFilter(''); setShipCityFilter(''); setShipNameSearch(''); }}
+                    style={{ padding: '8px 12px', background: 'transparent', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8, cursor: 'pointer', color: '#888888', fontSize: 11, fontWeight: 700, fontFamily: "'Jost',sans-serif", whiteSpace: 'nowrap' }}>
+                    Clear filters
+                  </button>
+                )}
+              </div>
+
               {/* Status filter chips */}
               <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
                 {['all', ...STATUSES].map(st => {
@@ -1174,8 +1303,12 @@ const ClientPortalView = () => {
 
               {/* Shipment cards */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {filtered.length === 0 && <div style={{ textAlign: 'center', padding: '32px 0', color: '#888888', fontSize: 13, fontFamily: "'Jost',sans-serif" }}>No shipments with status "{shipFilter}"</div>}
-                {filtered.map((s, idx) => {
+                {filtered.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '32px 0', color: '#888888', fontSize: 13, fontFamily: "'Jost',sans-serif" }}>
+                    No shipments match the current filters
+                  </div>
+                )}
+                {paginated.map((s, idx) => {
                   const chip = STATUS_CHIP[s.status] || STATUS_CHIP['Pending'];
                   const isDelivered = s.status === 'Delivered' || s.status === 'Completed';
                   return (
@@ -1204,7 +1337,15 @@ const ClientPortalView = () => {
                           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', marginBottom: 4, fontFamily: "'Jost',sans-serif" }}>Tracking pending</div>
                         )}
                         {s.shippingPartner && (
-                          <div style={{ fontSize: 11, color: '#888888', fontFamily: "'Jost',sans-serif" }}>{s.shippingPartner}</div>
+                          <div style={{ fontSize: 11, color: '#888888', fontFamily: "'Jost',sans-serif", display: 'flex', alignItems: 'center', gap: 4, justifyContent: isMobile ? 'flex-start' : 'center' }}>
+                            <span>{s.shippingPartner}</span>
+                            <button
+                              onClick={() => window.open(getCourierTrackingUrl(s.shippingPartner), '_blank', 'noopener,noreferrer')}
+                              title={`Track on ${s.shippingPartner}`}
+                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, padding: 0, background: 'rgba(184,151,90,0.1)', border: '1px solid rgba(184,151,90,0.25)', borderRadius: '50%', cursor: 'pointer', color: '#b8975a', flexShrink: 0 }}>
+                              {Ic.upArrow}
+                            </button>
+                          </div>
                         )}
                       </div>
 
@@ -1223,6 +1364,32 @@ const ClientPortalView = () => {
                   );
                 })}
               </div>
+
+              {/* Pagination — max 100 rows per page */}
+              {filtered.length > SHIP_PAGE_SIZE && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 18, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 12, color: '#888888', fontFamily: "'Jost',sans-serif" }}>
+                    Showing {(shipPageSafe - 1) * SHIP_PAGE_SIZE + 1}–{Math.min(shipPageSafe * SHIP_PAGE_SIZE, filtered.length)} of {filtered.length}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      onClick={() => setShipPage(p => Math.max(1, p - 1))}
+                      disabled={shipPageSafe <= 1}
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '7px 12px', background: '#fff', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8, cursor: shipPageSafe <= 1 ? 'not-allowed' : 'pointer', opacity: shipPageSafe <= 1 ? 0.4 : 1, color: '#1a1a1a', fontSize: 12, fontWeight: 700, fontFamily: "'Jost',sans-serif" }}>
+                      {Ic.chevL} Prev
+                    </button>
+                    <span style={{ fontSize: 12, color: '#1a1a1a', fontWeight: 700, fontFamily: "'Jost',sans-serif", padding: '0 4px' }}>
+                      Page {shipPageSafe} of {totalShipPages}
+                    </span>
+                    <button
+                      onClick={() => setShipPage(p => Math.min(totalShipPages, p + 1))}
+                      disabled={shipPageSafe >= totalShipPages}
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '7px 12px', background: '#fff', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8, cursor: shipPageSafe >= totalShipPages ? 'not-allowed' : 'pointer', opacity: shipPageSafe >= totalShipPages ? 0.4 : 1, color: '#1a1a1a', fontSize: 12, fontWeight: 700, fontFamily: "'Jost',sans-serif" }}>
+                      Next {Ic.chevR}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}
