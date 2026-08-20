@@ -1181,13 +1181,16 @@ const ClientPortalView = () => {
           const cityPool = shipStateFilter ? shipments.filter(s => s.state === shipStateFilter) : shipments;
           const availableCities = [...new Set(cityPool.map(s => s.city).filter(Boolean))].sort();
 
-          // Combine every active filter — status, state, city, and recipient-name search.
+          // Combine every active filter — status, state, city, and recipient-name/tracking-number search.
           let filtered = shipFilter === 'all' ? shipments : shipments.filter(s => s.status === shipFilter);
           if (shipStateFilter) filtered = filtered.filter(s => s.state === shipStateFilter);
           if (shipCityFilter) filtered = filtered.filter(s => s.city === shipCityFilter);
           if (shipNameSearch.trim()) {
             const q = shipNameSearch.trim().toLowerCase();
-            filtered = filtered.filter(s => (s.recipientName || '').toLowerCase().includes(q));
+            filtered = filtered.filter(s =>
+              (s.recipientName || '').toLowerCase().includes(q) ||
+              (s.trackingId || '').toLowerCase().includes(q)
+            );
           }
 
           // Pagination — max 100 rows per page.
@@ -1231,23 +1234,34 @@ const ClientPortalView = () => {
                 </button>
               </div>
 
-              {/* Filter bar — recipient search + state/city location filters */}
+              {/* Filter bar — recipient/tracking search + status + state/city location filters */}
               <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                {/* Recipient name search */}
-                <div style={{ flex: '1 1 220px', minWidth: 180 }}>
-                  <label style={{ display: 'block', fontSize: 9, fontWeight: 800, color: '#888888', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 5, fontFamily: "'Jost',sans-serif" }}>Recipient Name</label>
+                {/* Recipient name or tracking number search — stays pinned at the top while the list scrolls */}
+                <div style={{ flex: '1 1 240px', minWidth: 200, position: 'sticky', top: 0, zIndex: 20, background: '#faf8f5', paddingTop: 4, paddingBottom: 4 }}>
+                  <label style={{ display: 'block', fontSize: 9, fontWeight: 800, color: '#888888', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 5, fontFamily: "'Jost',sans-serif" }}>Name / Tracking ID</label>
                   <div style={{ position: 'relative' }}>
                     <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#888888', display: 'flex' }}>{Ic.search}</span>
                     <input
                       value={shipNameSearch}
                       onChange={e => setShipNameSearch(sanitizeText(e.target.value, 80))}
-                      placeholder="Search by name…"
+                      placeholder="Search by name or tracking number…"
                       style={{ width: '100%', padding: '8px 12px 8px 32px', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8, fontSize: 13, outline: 'none', color: '#1a1a1a', fontFamily: "'Jost',sans-serif", background: '#fff' }}
                     />
                     {shipNameSearch && (
                       <span onClick={() => setShipNameSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#888888', cursor: 'pointer', display: 'flex' }}>{Ic.close}</span>
                     )}
                   </div>
+                </div>
+
+                {/* Status filter — searchable, kept in sync with the status chips below */}
+                <div style={{ flex: '1 1 170px', minWidth: 150 }}>
+                  <SearchableSelect
+                    label="Delivery Status"
+                    value={shipFilter === 'all' ? '' : shipFilter}
+                    onChange={val => setShipFilter(val || 'all')}
+                    options={STATUSES}
+                    placeholder="All Statuses"
+                  />
                 </div>
 
                 {/* State filter — searchable */}
@@ -1273,16 +1287,28 @@ const ClientPortalView = () => {
                   />
                 </div>
 
-                {(shipStateFilter || shipCityFilter || shipNameSearch) && (
-                  <button
-                    onClick={() => { setShipStateFilter(''); setShipCityFilter(''); setShipNameSearch(''); }}
-                    style={{ padding: '8px 12px', background: 'transparent', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8, cursor: 'pointer', color: '#888888', fontSize: 11, fontWeight: 700, fontFamily: "'Jost',sans-serif", whiteSpace: 'nowrap' }}>
-                    Clear filters
-                  </button>
-                )}
+                {/* Reset — always visible at the end of the filter bar, disabled when nothing to clear */}
+                {(() => {
+                  const hasActiveFilters = shipFilter !== 'all' || shipStateFilter || shipCityFilter || shipNameSearch;
+                  return (
+                    <button
+                      onClick={() => { setShipFilter('all'); setShipStateFilter(''); setShipCityFilter(''); setShipNameSearch(''); }}
+                      disabled={!hasActiveFilters}
+                      title="Reset search and filters"
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+                        background: 'transparent', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8,
+                        cursor: hasActiveFilters ? 'pointer' : 'not-allowed',
+                        opacity: hasActiveFilters ? 1 : 0.4,
+                        color: '#888888', fontSize: 11, fontWeight: 700, fontFamily: "'Jost',sans-serif", whiteSpace: 'nowrap',
+                      }}>
+                      {Ic.close} Reset
+                    </button>
+                  );
+                })()}
               </div>
 
-              {/* Status filter chips */}
+              {/* Status filter chips — quick-access shortcuts, stay in sync with the dropdown above */}
               <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
                 {['all', ...STATUSES].map(st => {
                   const count = st === 'all' ? shipments.length : shipments.filter(s => s.status === st).length;
