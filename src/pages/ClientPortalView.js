@@ -376,6 +376,59 @@ const BrandVideoEmbed = ({ url, title, poster }) => {
   );
 };
 
+// ── Product Video Embed — NEW ──────────────────────────────────────────────
+// Wraps YouTubeEmbed/BrandVideoEmbed above so this file only needs ONE call
+// site regardless of where a product's video actually lives:
+//   - item.videoSource === 'link'   → item.videoUrl is already playable as-is
+//     (YouTube or a direct brand URL) — no network round trip needed.
+//   - item.videoSource === 'upload' → the video is a OneDrive file. Graph's
+//     download URL expires in ~1hr, so nothing is cached — this resolves a
+//     fresh one right before render, every time the card mounts, via a
+//     public (unauthenticated) portal-scoped endpoint rather than the internal
+//     /api/v2/products/:id/video-stream route (that one requires staff auth,
+//     and clients never get a login for the portal).
+//
+// Backend: GET /api/portal/public/:slug/products/:productId/video-stream
+//   (routes/clientPortalRoutes.js) → { url, expiresInSeconds }. It answers
+//   404 unless productId belongs to THIS portal's items or combo items, so a
+//   slug can't be used to probe other products' OneDrive links.
+const ProductVideoEmbed = ({ item, slug }) => {
+  const hasUpload = item.videoSource === 'upload';
+  const hasLink   = !hasUpload && Boolean(item.videoUrl);
+
+  const [resolvedUrl, setResolvedUrl] = React.useState(hasLink ? item.videoUrl : null);
+  const [resolving, setResolving]     = React.useState(hasUpload);
+  const [failed, setFailed]           = React.useState(false);
+
+  React.useEffect(() => {
+    if (!hasUpload) return;
+    let cancelled = false;
+    setResolving(true);
+    setFailed(false);
+    fetch(`${API_BASE}/api/portal/public/${slug}/products/${item.productId}/video-stream`)
+      .then(r => { if (!r.ok) throw new Error('resolve failed'); return r.json(); })
+      .then(data => { if (!cancelled) setResolvedUrl(data.url); })
+      .catch(() => { if (!cancelled) setFailed(true); })
+      .finally(() => { if (!cancelled) setResolving(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasUpload, item.productId, slug]);
+
+  if (!hasUpload && !hasLink) return null;
+  if (resolving) {
+    return (
+      <div style={{ borderRadius: 10, background: '#faf8f5', border: '1px solid rgba(0,0,0,0.06)', marginTop: 12, aspectRatio: '16/9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 11, fontFamily: "'Jost',sans-serif" }}>
+        Loading video…
+      </div>
+    );
+  }
+  if (failed || !resolvedUrl) return null; // fail quietly on the client side — nothing to embed
+
+  return getYouTubeId(resolvedUrl)
+    ? <YouTubeEmbed url={resolvedUrl} title={item.name} />
+    : <BrandVideoEmbed url={resolvedUrl} title={item.name} poster={item.imageUrl} />;
+};
+
 // ── Product Image Carousel ────────────────────────────────────────────────────
 // Shows additionalImages as swipeable dots-nav carousel below primary image.
 // Only rendered when there are ≥1 additional images.
@@ -1057,6 +1110,7 @@ const ClientPortalView = () => {
                 portal={portal}
                 combos={portal.comboItems || []}
                 onBuildHamper={(catFiltersSnapshot) => { setHamperInitialRange(catFiltersSnapshot || {}); setHamperOpen(true); }}
+                slug={slug}
               />
             : items.length === 0
               ? <EmptyState icon="📋" title="Options being curated" sub="The Marqland team will update this shortly." />
@@ -2417,17 +2471,11 @@ const SelectedItemsGroups = ({ selCombos, selProducts, wishlisted, toggleWish, s
                     {item.description && (
                       <p style={{ fontSize: 11, color: '#888', lineHeight: 1.6, margin: 0, fontFamily: "'Jost',sans-serif", display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.description}</p>
                     )}
-                    {/* ── Video embed (YouTube or direct link) — hidden entirely if no video uploaded ── */}
-                    {item.videoUrl && getYouTubeId(item.videoUrl) && (
+                    {/* ── Video embed (YouTube, direct link, or OneDrive upload) — hidden entirely if no video ── */}
+                    {(item.videoUrl || item.videoSource === 'upload') && (
                       <div style={{ marginTop: 4 }}>
                         <div style={{ fontSize: 9, fontWeight: 800, color: '#888888', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6, fontFamily: "'Jost',sans-serif" }}>🎬 Product Video</div>
-                        <YouTubeEmbed url={item.videoUrl} title={item.name} />
-                      </div>
-                    )}
-                    {item.videoUrl && !getYouTubeId(item.videoUrl) && (
-                      <div style={{ marginTop: 4 }}>
-                        <div style={{ fontSize: 9, fontWeight: 800, color: '#888888', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6, fontFamily: "'Jost',sans-serif" }}>🎬 Product Video</div>
-                        <BrandVideoEmbed url={item.videoUrl} title={item.name} poster={item.imageUrl} />
+                        <ProductVideoEmbed item={item} slug={portal?.slug} />
                       </div>
                     )}
                   </div>
@@ -2441,7 +2489,7 @@ const SelectedItemsGroups = ({ selCombos, selProducts, wishlisted, toggleWish, s
   );
 };
 
-const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = () => { }, portal = null, combos = [], onBuildHamper = null }) => {
+const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = () => { }, portal = null, combos = [], onBuildHamper = null, slug }) => {
   const [activeCategory, setActiveCategory] = React.useState(null);
   const [activeSubCat, setActiveSubCat] = React.useState(null);
   const [imgSpans, setImgSpans] = React.useState({});
@@ -2772,17 +2820,11 @@ const ProductBento = ({ items, onZoom, wishlisted = new Set(), onToggleWish = ()
                               >{item.description}</p>
                             )}
 
-                            {/* ── Video embed (YouTube or direct link) ── */}
-                            {item.videoUrl && getYouTubeId(item.videoUrl) && (
+                            {/* ── Video embed (YouTube, direct link, or OneDrive upload) ── */}
+                            {(item.videoUrl || item.videoSource === 'upload') && (
                               <div style={{ marginTop: 4 }}>
                                 <div style={{ fontSize: 9, fontWeight: 800, color: '#888888', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6, fontFamily: "'Jost',sans-serif" }}>🎬 Product Video</div>
-                                <YouTubeEmbed url={item.videoUrl} title={item.name} />
-                              </div>
-                            )}
-                            {item.videoUrl && !getYouTubeId(item.videoUrl) && (
-                              <div style={{ marginTop: 4 }}>
-                                <div style={{ fontSize: 9, fontWeight: 800, color: '#888888', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6, fontFamily: "'Jost',sans-serif" }}>🎬 Product Video</div>
-                                <BrandVideoEmbed url={item.videoUrl} title={item.name} poster={item.imageUrl} />
+                                <ProductVideoEmbed item={item} slug={slug || portal?.slug} />
                               </div>
                             )}
                           </div>
